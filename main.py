@@ -162,6 +162,10 @@ async def health_check():
 async def debug_env():
     """Debug endpoint to check Railway environment variables."""
     import os
+    import pathlib
+    google_app_creds = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+    creds_file_exists = pathlib.Path(google_app_creds).exists() if google_app_creds else False
+
     return {
         "RAILWAY_PROJECT_ID": os.environ.get('RAILWAY_PROJECT_ID'),
         "RAILWAY_ENVIRONMENT_NAME": os.environ.get('RAILWAY_ENVIRONMENT_NAME'),
@@ -169,7 +173,9 @@ async def debug_env():
         "RAILWAY_ENVIRONMENT": os.environ.get('RAILWAY_ENVIRONMENT'),
         "has_gcp_json": bool(os.environ.get('GCP_SERVICE_ACCOUNT_JSON')),
         "is_production_check": os.environ.get('RAILWAY_PROJECT_ID') is not None,
-        "settings_is_production": settings.is_production
+        "settings_is_production": settings.is_production,
+        "GOOGLE_APPLICATION_CREDENTIALS": google_app_creds,
+        "credentials_file_exists": creds_file_exists
     }
 
 # Test endpoint for WebSocketHandler initialization
