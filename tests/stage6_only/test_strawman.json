@@ -1,0 +1,127 @@
+{
+  "type": "PresentationStrawman",
+  "main_title": "AI in Healthcare: Transforming Diagnostics",
+  "overall_theme": "Professional and data-driven",
+  "design_suggestions": "Modern medical theme with blue and white tones",
+  "target_audience": "Healthcare professionals at medical conference",
+  "presentation_duration": 10,
+  "footer_text": "AI Healthcare 2025",
+  "slides": [
+    {
+      "slide_number": 1,
+      "slide_id": "slide_001",
+      "title": "AI in Healthcare",
+      "slide_type": "title_slide",
+      "slide_type_classification": "title_slide",
+      "layout_id": "L29",
+      "variant_id": "hero_centered",
+      "generated_title": "AI in Healthcare: Transforming Patient Outcomes",
+      "generated_subtitle": "Revolutionizing diagnostic accuracy through advanced machine learning",
+      "narrative": "Introduction to AI applications in healthcare diagnostics, focusing on recent breakthroughs in medical imaging and predictive analytics.",
+      "key_points": [
+        "AI-powered diagnostics improving accuracy by 40%",
+        "Real-time patient monitoring and early intervention",
+        "Case studies from leading medical institutions"
+      ],
+      "analytics_needed": null,
+      "visuals_needed": "Medical imagery, AI visualization",
+      "diagrams_needed": null,
+      "tables_needed": null,
+      "structure_preference": "Visual-centered with strong title",
+      "speaker_notes": "Opening slide - set the context for AI in healthcare",
+      "layout_selection_reasoning": "Hero layout chosen for impact title slide",
+      "content_guidance": {
+        "content_type": "inspirational",
+        "visual_complexity": "simple",
+        "content_density": "minimal",
+        "tone_indicator": "professional",
+        "data_type": null,
+        "emphasis_hierarchy": [
+          "main_message",
+          "visual_impact"
+        ],
+        "relationship_to_previous": null,
+        "generation_instructions": "Create bold, inspiring opening message",
+        "pattern_rationale": "Title slide requires visual impact and clear value proposition"
+      }
+    },
+    {
+      "slide_number": 2,
+      "slide_id": "slide_002",
+      "title": "Key Diagnostic Applications",
+      "slide_type": "data_driven",
+      "slide_type_classification": "matrix_2x2",
+      "layout_id": "L25",
+      "variant_id": "matrix_2x2",
+      "generated_title": "Four Pillars of AI Diagnostic Excellence",
+      "generated_subtitle": "Critical applications transforming patient care and clinical outcomes",
+      "narrative": "Overview of four key diagnostic areas where AI is making the biggest impact: medical imaging, pathology analysis, predictive diagnostics, and treatment planning.",
+      "key_points": [
+        "Medical Imaging: 95% accuracy in tumor detection",
+        "Pathology Analysis: 60% faster diagnosis",
+        "Predictive Diagnostics: Early disease detection",
+        "Treatment Planning: Personalized care protocols"
+      ],
+      "analytics_needed": "Accuracy percentages, time savings metrics",
+      "visuals_needed": "Icons for each application area",
+      "diagrams_needed": null,
+      "tables_needed": null,
+      "structure_preference": "2x2 matrix layout",
+      "speaker_notes": "Core content - explain each diagnostic application with data",
+      "layout_selection_reasoning": "Matrix layout perfect for comparing 4 distinct areas",
+      "content_guidance": {
+        "content_type": "data",
+        "visual_complexity": "moderate",
+        "content_density": "balanced",
+        "tone_indicator": "analytical",
+        "data_type": "metrics",
+        "emphasis_hierarchy": [
+          "data_points",
+          "supporting_context"
+        ],
+        "relationship_to_previous": "deep_dive",
+        "generation_instructions": "Present structured data comparison with clear metrics",
+        "pattern_rationale": "Matrix format ideal for comparing 4 related concepts"
+      }
+    },
+    {
+      "slide_number": 3,
+      "slide_id": "slide_003",
+      "title": "Next Steps",
+      "slide_type": "conclusion_slide",
+      "slide_type_classification": "closing_slide",
+      "layout_id": "L29",
+      "variant_id": "hero_centered",
+      "generated_title": "Implementing AI in Your Practice",
+      "generated_subtitle": "Practical steps to adopt AI-powered diagnostics in your institution",
+      "narrative": "Call to action for implementing AI diagnostic tools, with emphasis on starting small, validating results, and scaling gradually.",
+      "key_points": [
+        "Start with pilot programs in one department",
+        "Validate AI recommendations against expert review",
+        "Scale successful implementations",
+        "Continuous monitoring and improvement"
+      ],
+      "analytics_needed": null,
+      "visuals_needed": "Implementation roadmap visual",
+      "diagrams_needed": "Step-by-step process flow",
+      "tables_needed": null,
+      "structure_preference": "Visual-centered with clear call to action",
+      "speaker_notes": "Closing slide - actionable next steps for audience",
+      "layout_selection_reasoning": "Hero layout for strong call to action",
+      "content_guidance": {
+        "content_type": "process",
+        "visual_complexity": "simple",
+        "content_density": "balanced",
+        "tone_indicator": "inspirational",
+        "data_type": null,
+        "emphasis_hierarchy": [
+          "call_to_action",
+          "practical_steps"
+        ],
+        "relationship_to_previous": "conclusion",
+        "generation_instructions": "Provide clear, actionable next steps with motivational tone",
+        "pattern_rationale": "Closing slide needs strong call to action and clear takeaways"
+      }
+    }
+  ]
+}

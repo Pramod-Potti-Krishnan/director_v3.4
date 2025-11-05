@@ -1,19 +1,21 @@
 """
-Text & Table Builder Service Client - v3.1
+Text & Table Builder Service Client - v3.4
 ===========================================
 
-Integration with Text & Table Builder v1.0 Railway service.
+Integration with Text & Table Builder v1.2 Railway service.
 
 Service Details:
-- Production URL: https://web-production-e3796.up.railway.app
+- Production URL: https://web-production-5daf.up.railway.app (v1.2)
+- Legacy URL: https://web-production-e3796.up.railway.app (v1.0/v1.1)
 - Synchronous API (5-15s response time)
-- Session-based context retention (1-hour TTL, last 5 slides)
-- LLM-powered with Gemini 2.5-flash default
+- v1.2: Element-based content generation + hero slide endpoints
+- LLM-powered with Gemini via Vertex AI with ADC
 """
 
 import asyncio
 from typing import Dict, Any
 import requests
+import httpx
 from src.utils.logger import setup_logger
 from src.models.content import GeneratedText  # Use Pydantic model
 
@@ -186,3 +188,72 @@ class TextServiceClient:
                 "source": "text_service_v1.0"
             }
         )
+
+    async def call_hero_endpoint(
+        self,
+        endpoint: str,
+        payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Call Text Service v1.2 hero slide endpoint.
+
+        NEW in v3.4: Supports hero slide generation via specialized endpoints.
+
+        Args:
+            endpoint: Hero endpoint path (e.g., "/v1.2/hero/title")
+            payload: Hero request payload:
+                - slide_number: int
+                - slide_type: str ("title_slide", "section_divider", "closing_slide")
+                - narrative: str
+                - topics: List[str]
+                - context: Dict (theme, audience, etc.)
+
+        Returns:
+            Hero response dictionary:
+                - content: str (complete HTML structure)
+                - metadata: Dict (validation results, character counts, etc.)
+
+        Raises:
+            Exception: On API errors or timeouts
+
+        Example:
+            response = await client.call_hero_endpoint(
+                endpoint="/v1.2/hero/title",
+                payload={
+                    "slide_number": 1,
+                    "slide_type": "title_slide",
+                    "narrative": "AI in Healthcare",
+                    "topics": ["Diagnostic AI", "Patient Outcomes"],
+                    "context": {"theme": "professional", "audience": "healthcare executives"}
+                }
+            )
+            # Returns: {"content": "<div class='title-slide'>...</div>", "metadata": {...}}
+        """
+        url = f"{self.base_url}{endpoint}"
+
+        logger.info(f"Calling hero endpoint: {url}")
+        logger.debug(f"Hero payload: {payload}")
+
+        try:
+            # Use httpx for async HTTP requests
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+
+                result = response.json()
+                logger.info(f"Hero endpoint responded: {response.status_code}")
+                logger.debug(f"Hero response: {result}")
+
+                return result
+
+        except httpx.TimeoutException as e:
+            logger.error(f"Hero endpoint timeout after {self.timeout}s: {url}")
+            raise Exception(f"Hero endpoint timeout: {endpoint}")
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Hero endpoint HTTP error: {e.response.status_code} - {e.response.text}")
+            raise Exception(f"Hero endpoint error: {e.response.status_code}")
+
+        except Exception as e:
+            logger.error(f"Hero endpoint call failed: {str(e)}")
+            raise Exception(f"Hero endpoint failure: {str(e)}")

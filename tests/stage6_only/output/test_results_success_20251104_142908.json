@@ -1,0 +1,46 @@
+{
+  "test_info": {
+    "timestamp": "2025-11-04T14:29:08.476024",
+    "duration_seconds": 0.43,
+    "success": true,
+    "test_type": "stage6_standalone"
+  },
+  "strawman_info": {
+    "title": "AI in Healthcare: Transforming Diagnostics",
+    "slide_count": 3,
+    "footer_text": "AI Healthcare 2025",
+    "duration_minutes": 10
+  },
+  "slides": [
+    {
+      "slide_number": 1,
+      "classification": "title_slide",
+      "variant_id": "hero_centered",
+      "generated_title": "AI in Healthcare: Transforming Patient Outcomes",
+      "layout_id": "L29"
+    },
+    {
+      "slide_number": 2,
+      "classification": "matrix_2x2",
+      "variant_id": "matrix_2x2",
+      "generated_title": "Four Pillars of AI Diagnostic Excellence",
+      "layout_id": "L25"
+    },
+    {
+      "slide_number": 3,
+      "classification": "closing_slide",
+      "variant_id": "hero_centered",
+      "generated_title": "Implementing AI in Your Practice",
+      "layout_id": "L29"
+    }
+  ],
+  "result": {
+    "type": "presentation_url",
+    "url": "http://localhost:8504/p/fc4f85da-899e-42af-be20-fe8e424be429",
+    "slide_count": 3,
+    "content_generated": true,
+    "successful_slides": 0,
+    "failed_slides": 3,
+    "message": "Your presentation with generated content is ready! View it at: http://localhost:8504/p/fc4f85da-899e-42af-be20-fe8e424be429"
+  }
+}
