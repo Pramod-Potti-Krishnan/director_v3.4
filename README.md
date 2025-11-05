@@ -1,43 +1,57 @@
 # Director Agent - AI Presentation Assistant
 
-## Version 3.3 - Security Enhanced
+## Version 3.4 - Content Generation & Text Service v1.2 Integration
 
-**🔐 MAJOR SECURITY UPDATE**: v3.3 replaces static API keys with Application Default Credentials (ADC) for enhanced security.
+**🎨 MAJOR FEATURE UPDATE**: v3.4 adds Stage 6 (CONTENT_GENERATION) with full Text Service v1.2 integration for generating presentation content.
 
-**Key Changes:**
-- ✅ No more API keys in environment variables
-- ✅ Uses rotatable service accounts (production)
-- ✅ Full GCP audit logging
-- ✅ Fine-grained IAM permissions
-- ⚠️ **Breaking change**: Requires new setup (see below)
+**Key Features:**
+- ✅ **Stage 6 - CONTENT_GENERATION**: Generate rich slide content automatically
+- ✅ **Text Service v1.2**: Dual architecture (element-based for content, single-call for heroes)
+- ✅ **Hero Slides**: Beautiful gradient title, section divider, and closing slides (L29 layout)
+- ✅ **Content Slides**: 26 variants across 10 slide types with deterministic assembly (L25 layout)
+- ✅ **Service Router**: Intelligent routing between hero and content endpoints
+- ✅ **Content Transformer**: Maps generated content to layout formats
+- ✅ **ADC Security**: Continues v3.3's Application Default Credentials approach
+
+**What's New in v3.4:**
+- 6-stage workflow (added CONTENT_GENERATION after GENERATE_STRAWMAN)
+- Integration with Text Service v1.2 deployed at Railway
+- Hero slide generation with v1.1-quality gradients and typography
+- Content slide generation with parallel element-based assembly
+- Complete end-to-end presentation generation with visual content
 
 **Documentation:**
-- 📖 [SECURITY.md](./SECURITY.md) - Complete security guide and setup
-- 📖 [V3.3_MIGRATION_GUIDE.md](./V3.3_MIGRATION_GUIDE.md) - Migration from v3.1
-- 📖 [V3.3_CHANGELOG.md](./V3.3_CHANGELOG.md) - What's new in v3.3
+- 📖 [V3.4_IMPLEMENTATION_PLAN.md](./docs/V3.4_IMPLEMENTATION_PLAN.md) - Stage 6 implementation details
+- 📖 [SECURITY.md](./SECURITY.md) - Security guide and setup
+- 📖 [TAXONOMY_ARCHITECTURE_V3.4_V1.1.md](../../TAXONOMY_ARCHITECTURE_V3.4_V1.1.md) - Architecture overview
 
 ---
 
 ## Overview
 
-The Director Agent is a standalone implementation of the Phase 1 architecture for an AI-powered presentation assistant. It features a state-driven architecture with intent-based routing, providing a natural conversational flow for creating presentations.
+The Director Agent is a 6-stage state machine that orchestrates complete presentation generation. It combines conversational AI for requirements gathering with automated content generation to produce visually stunning presentations ready for delivery.
 
 ## Architecture
 
-This agent implements a clean Phase 1 architecture with:
-- **State-Driven Workflow**: Clear progression through presentation creation states
+This agent implements a complete 6-stage presentation generation pipeline:
+- **State-Driven Workflow**: Clear progression through 6 stages from greeting to content generation
 - **Intent-Based Routing**: Natural language understanding for user interactions
-- **WebSocket Communication**: Real-time bidirectional messaging
-- **Modular Prompt System**: Maintainable and versioned prompts
-- **v3.3 Security**: Application Default Credentials (ADC) for Google Cloud
+- **WebSocket Communication**: Real-time bidirectional messaging for live updates
+- **Modular Prompt System**: Maintainable and versioned prompts for each stage
+- **ADC Security**: Application Default Credentials (ADC) for Google Cloud services
+- **Text Service Integration**: Seamless routing to Text Service v1.2 for content generation
+- **Dual Content Architecture**: Hero slides (single-call) vs content slides (element-based)
+- **Service Router**: Intelligent endpoint selection based on slide classification
+- **Content Transformer**: Maps generated content to L25/L29 layout formats
 - **Multi-Model Support**: Works with Google Gemini (via Vertex AI), OpenAI, and Anthropic
 
 ## Core Components
 
 ### 1. Director Agent (`src/agents/director.py`)
-- Manages presentation creation workflow
-- Handles state-specific processing
+- Manages 6-stage presentation workflow
+- Handles state-specific processing for each stage
 - Implements modular prompt loading
+- Orchestrates content generation in Stage 6
 
 ### 2. Intent Router (`src/agents/intent_router.py`)
 - Classifies user messages into specific intents
@@ -48,21 +62,85 @@ This agent implements a clean Phase 1 architecture with:
 - Manages WebSocket connections
 - Routes messages based on intent
 - Implements streamlined protocol
+- Sends real-time content generation updates
 
 ### 4. Session Manager (`src/utils/session_manager.py`)
 - Manages session state and persistence
 - Handles conversation history
 - Integrates with Supabase storage
+- Stores generated presentation data
+
+### 5. Service Router v1.2 (`src/utils/service_router_v1_2.py`)
+- Routes slides to Text Service v1.2 endpoints
+- Differentiates hero slides (L29) from content slides (L25)
+- Handles hero endpoints: `/v1.2/hero/title`, `/v1.2/hero/section`, `/v1.2/hero/closing`
+- Handles content endpoint: `/v1.2/generate`
+- Packages responses in consistent flat structure
+
+### 6. Hero Request Transformer (`src/utils/hero_request_transformer.py`)
+- Transforms Director slide specs to hero endpoint payloads
+- Builds narrative, topics, and context for hero generation
+- Includes theme, audience, presentation metadata
+
+### 7. Content Transformer (`src/utils/content_transformer.py`)
+- Maps generated content to layout formats (L25/L29)
+- Handles hero slides (complete inline HTML) separately from content slides
+- Prepares data for layout architect service
 
 ## States and Flow
 
-The agent progresses through these states:
+The agent progresses through these 6 stages:
 
-1. **PROVIDE_GREETING** → Initial welcome state
-2. **ASK_CLARIFYING_QUESTIONS** → Gather presentation requirements
-3. **CREATE_CONFIRMATION_PLAN** → Propose presentation structure
-4. **GENERATE_STRAWMAN** → Create initial presentation outline
-5. **REFINE_STRAWMAN** → Iteratively improve the presentation
+1. **PROVIDE_GREETING** → Initial welcome and context gathering
+2. **ASK_CLARIFYING_QUESTIONS** → Gather detailed presentation requirements
+3. **CREATE_CONFIRMATION_PLAN** → Propose presentation structure with slide breakdown
+4. **GENERATE_STRAWMAN** → Create initial presentation outline with classifications
+5. **REFINE_STRAWMAN** → Iteratively improve the presentation structure
+6. **CONTENT_GENERATION** → **NEW in v3.4** - Generate visual content for all slides
+
+### Stage 6: Content Generation Workflow
+
+```
+User accepts strawman
+        ↓
+Director enters CONTENT_GENERATION state
+        ↓
+For each slide in strawman:
+    ├─ Classify slide type
+    │   ├─ Hero slide? (title/section/closing)
+    │   │   └─> Route to /v1.2/hero/{type}
+    │   └─ Content slide? (matrix/grid/table/etc)
+    │       └─> Route to /v1.2/generate
+    ↓
+    ├─ Build request payload
+    │   ├─ Hero: narrative, topics, context
+    │   └─ Content: variant_id, slide_spec, presentation_spec
+    ↓
+    ├─ Call Text Service v1.2
+    │   ├─ Text Service generates content
+    │   │   ├─ Hero: Single LLM call with rich prompt
+    │   │   └─ Content: Element-based parallel generation
+    │   └─ Returns HTML + metadata
+    ↓
+    ├─ Transform content to layout format
+    │   ├─ Hero: Pass complete inline HTML to L29
+    │   └─ Content: Map elements to L25 rich_content
+    ↓
+    └─ Send to Layout Architect for rendering
+        ↓
+Collect all rendered slides
+        ↓
+Package presentation with URLs
+        ↓
+Return presentation_url to user
+```
+
+**Key Features:**
+- ✅ Parallel slide generation for speed
+- ✅ Real-time progress updates via WebSocket
+- ✅ Hero slides with gradients and large typography (96px/84px/72px fonts)
+- ✅ Content slides with deterministic template assembly
+- ✅ Complete presentations ready for viewing
 
 ## Setup Instructions
 
@@ -274,17 +352,81 @@ ws://localhost:8000/ws?session_id={session_id}&user_id={user_id}
 |----------|-------------|----------|---------|
 | `SUPABASE_URL` | Supabase project URL | Yes | - |
 | `SUPABASE_ANON_KEY` | Supabase anonymous key | Yes | - |
-| `GOOGLE_API_KEY` | Google Gemini API key | One of AI keys required | - |
-| `OPENAI_API_KEY` | OpenAI API key | One of AI keys required | - |
-| `ANTHROPIC_API_KEY` | Anthropic Claude API key | One of AI keys required | - |
+| `GCP_PROJECT_ID` | Google Cloud project ID for Vertex AI | Yes (for Gemini) | - |
+| `GCP_SERVICE_ACCOUNT_JSON` | Service account JSON (production) | Yes (Railway) | - |
+| `GOOGLE_API_KEY` | Google Gemini API key (deprecated, use ADC) | One of AI keys | - |
+| `OPENAI_API_KEY` | OpenAI API key | One of AI keys | - |
+| `ANTHROPIC_API_KEY` | Anthropic Claude API key | One of AI keys | - |
+| `TEXT_SERVICE_URL` | Text Service v1.2 base URL | Yes | `https://web-production-5daf.up.railway.app` |
+| `LAYOUT_ARCHITECT_URL` | Layout Architect service URL | Yes | `http://localhost:8504` |
 | `PORT` | Server port | No | 8000 |
 | `DEBUG` | Debug mode | No | false |
 | `USE_STREAMLINED_PROTOCOL` | Use streamlined WebSocket protocol | No | true |
 | `STREAMLINED_PROTOCOL_PERCENTAGE` | A/B testing percentage | No | 100 |
 
+**v3.4 New Requirements:**
+- `TEXT_SERVICE_URL`: Points to Text Service v1.2 (Railway production or local)
+- `LAYOUT_ARCHITECT_URL`: Points to Layout Architect for slide rendering
+- `GCP_PROJECT_ID`: Required for Vertex AI integration in Text Service
+
 ## Testing
 
-### Manual Testing
+### Stage 6 Content Generation Testing
+
+Test the complete content generation workflow:
+
+```bash
+cd agents/director_agent/v3.4
+python3 tests/stage6_only/test_content_generation.py
+```
+
+**What This Tests:**
+- ✅ Complete Stage 6 workflow with 3-slide presentation
+- ✅ Hero slides (title, closing) routed to `/v1.2/hero/*` endpoints
+- ✅ Content slide (matrix_2x2) routed to `/v1.2/generate` endpoint
+- ✅ Text Service v1.2 integration at Railway
+- ✅ Layout Architect rendering
+- ✅ Presentation URL generation
+
+**Expected Output:**
+```
+============================================================
+Director v3.4 - Stage 6 Content Generation Test
+============================================================
+
+Test Configuration:
+  Text Service: https://web-production-5daf.up.railway.app
+  Layout Architect: http://localhost:8504
+  Slides: 3 (title_slide, matrix_2x2, closing_slide)
+
+Starting Stage 6 Content Generation...
+
+Slide 1/3: title_slide (L29 Hero)
+  ✓ Routed to /v1.2/hero/title
+  ✓ Generated beautiful gradient HTML
+  ✓ Status: 200 OK
+
+Slide 2/3: matrix_2x2 (L25 Content)
+  ✓ Routed to /v1.2/generate
+  ✓ Generated 4 elements in parallel
+  ✓ Status: 200 OK
+
+Slide 3/3: closing_slide (L29 Hero)
+  ✓ Routed to /v1.2/hero/closing
+  ✓ Generated CTA button with gradients
+  ✓ Status: 200 OK
+
+Stage 6 Results:
+  Successful: 3/3 ✅
+  Failed: 0/3
+  Duration: 9.37s
+
+Presentation URL: http://localhost:8504/p/8b4c2ef2-669f-48a5-bda4-7c8971160183
+
+✅ All slides generated successfully!
+```
+
+### Manual WebSocket Testing
 
 1. Connect to WebSocket:
 ```javascript
@@ -301,7 +443,7 @@ ws.onmessage = (event) => {
 // Send a message
 ws.send(JSON.stringify({
   type: 'user_message',
-  data: { text: 'I need a presentation about quantum computing' }
+  data: { text: 'I need a presentation about AI in healthcare' }
 }));
 ```
 
@@ -314,6 +456,26 @@ curl http://localhost:8000/test-handler
 ```bash
 curl http://localhost:8000/health
 ```
+
+### Testing Text Service Integration
+
+Test hero slide generation directly:
+```bash
+curl -X POST https://web-production-5daf.up.railway.app/v1.2/hero/title \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slide_number": 1,
+    "slide_type": "title_slide",
+    "narrative": "AI transforming healthcare",
+    "topics": ["Machine Learning", "Patient Outcomes"],
+    "context": {
+      "theme": "professional",
+      "audience": "healthcare professionals"
+    }
+  }'
+```
+
+Expected: Beautiful gradient HTML with 96px fonts and text shadows
 
 ## Troubleshooting
 
@@ -339,23 +501,46 @@ curl http://localhost:8000/health
 
 ### Project Structure
 ```
-director_agent/
-├── main.py                 # FastAPI application entry
+director_agent/v3.4/
+├── main.py                          # FastAPI application entry
 ├── config/
-│   ├── settings.py        # Configuration management
-│   └── prompts/
-│       └── modular/       # State-specific prompts
+│   ├── settings.py                  # Configuration management
+│   ├── prompts/
+│   │   └── modular/                 # State-specific prompts (6 stages)
+│   └── deck_builder/
+│       └── layout_schemas.json      # Layout schema mappings
 ├── src/
-│   ├── agents/           # Core agents
-│   ├── handlers/         # WebSocket handler
-│   ├── models/          # Pydantic models
-│   ├── storage/         # Database integration
-│   ├── utils/           # Utility functions
-│   └── workflows/       # State machine
-├── requirements.txt      # Dependencies
-├── .env.example         # Environment template
-└── README.md           # This file
+│   ├── agents/
+│   │   ├── director.py             # Main Director agent (6-stage workflow)
+│   │   └── intent_router.py        # Intent classification
+│   ├── handlers/
+│   │   └── websocket.py            # WebSocket connection handler
+│   ├── models/                     # Pydantic data models
+│   ├── storage/                    # Supabase integration
+│   ├── utils/
+│   │   ├── service_router_v1_2.py  # Routes to Text Service v1.2
+│   │   ├── hero_request_transformer.py  # Hero payload builder
+│   │   ├── content_transformer.py   # Layout format mapper
+│   │   └── gcp_auth.py             # ADC authentication
+│   └── workflows/
+│       └── state_machine.py        # 6-stage state machine
+├── tests/
+│   └── stage6_only/                # Stage 6 testing
+│       ├── test_content_generation.py  # Full Stage 6 test
+│       └── output/                 # Test result logs
+├── requirements.txt                # Dependencies
+├── .env.example                    # Environment template
+├── README.md                       # This file
+└── docs/
+    └── V3.4_IMPLEMENTATION_PLAN.md  # Stage 6 implementation guide
 ```
+
+**New in v3.4:**
+- `service_router_v1_2.py`: Routes slides to correct Text Service endpoints
+- `hero_request_transformer.py`: Builds hero slide request payloads
+- `content_transformer.py`: Maps generated content to L25/L29 formats
+- `tests/stage6_only/`: Dedicated Stage 6 testing suite
+- `layout_schemas.json`: Schema mappings for all 26 content variants + 3 hero types
 
 ### Adding New States
 

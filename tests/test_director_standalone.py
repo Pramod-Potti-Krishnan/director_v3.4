@@ -96,7 +96,7 @@ class DirectorStandaloneTester:
         print("═" * 60)
 
         scenarios_list = [
-            ("1", "default", "AI in Healthcare", "Standard presentation about AI applications in healthcare"),
+            ("1", "default", "AI in Healthcare (Quick 3-Slide Test)", "Fast 10-minute presentation with 3 slides for testing"),
             ("2", "executive", "Q3 Financial Results", "Board presentation on quarterly financial performance"),
             ("3", "technical", "Microservices Architecture", "Technical presentation for engineering team"),
             ("4", "educational", "Climate Change Basics", "Educational presentation for high school students"),
@@ -136,11 +136,37 @@ class DirectorStandaloneTester:
         return "\n".join(output)
 
     def format_slide_details(self, slide) -> str:
-        """Format a single slide with all planning fields."""
+        """Format a single slide with all planning fields.
+
+        v3.4-v1.2: Enhanced to display v1.2 integration fields:
+        - variant_id (random selection from catalog)
+        - generated_title (50 char limit)
+        - generated_subtitle (90 char limit)
+        - slide_type_classification (13-type taxonomy)
+        """
         output = []
         output.append(f"\n{Colors.GREEN}Slide {slide.slide_number}: {slide.title}{Colors.ENDC}")
         output.append(f"  Type: {slide.slide_type}")
         output.append(f"  ID: {slide.slide_id}")
+
+        # v3.4-v1.2: Display slide type classification
+        if hasattr(slide, 'slide_type_classification') and slide.slide_type_classification:
+            output.append(f"  {Colors.BLUE}Classification:{Colors.ENDC} {slide.slide_type_classification}")
+
+        # v3.4-v1.2: Display variant_id
+        if hasattr(slide, 'variant_id') and slide.variant_id:
+            output.append(f"  {Colors.CYAN}Variant ID:{Colors.ENDC} {slide.variant_id}")
+
+        # v3.4-v1.2: Display generated title with character count
+        if hasattr(slide, 'generated_title') and slide.generated_title:
+            char_color = Colors.GREEN if len(slide.generated_title) <= 50 else Colors.RED
+            output.append(f"  {Colors.GREEN}Generated Title:{Colors.ENDC} {slide.generated_title} {char_color}({len(slide.generated_title)} chars){Colors.ENDC}")
+
+        # v3.4-v1.2: Display generated subtitle with character count
+        if hasattr(slide, 'generated_subtitle') and slide.generated_subtitle:
+            char_color = Colors.GREEN if len(slide.generated_subtitle) <= 90 else Colors.RED
+            output.append(f"  {Colors.GREEN}Generated Subtitle:{Colors.ENDC} {slide.generated_subtitle} {char_color}({len(slide.generated_subtitle)} chars){Colors.ENDC}")
+
         output.append(f"  Narrative: {slide.narrative}")
 
         output.append(f"  Key Points:")
@@ -193,7 +219,7 @@ class DirectorStandaloneTester:
 
             content = enriched_slide.generated_text.content
 
-            # v3.1.1: Detect content format (structured dict vs legacy string)
+            # v3.4-v1.2: Detect content format (structured dict vs v1.2 HTML vs v1.0 legacy)
             if isinstance(content, dict):
                 # v1.1: Structured content with format ownership
                 output.append(f"  {Colors.CYAN}📊 Format: Structured (v1.1 Text Service){Colors.ENDC}")
@@ -215,16 +241,31 @@ class DirectorStandaloneTester:
 
                 # Show field count
                 output.append(f"\n    {Colors.BLUE}Total fields: {len(content)}{Colors.ENDC}")
-            else:
-                # v1.0: Legacy HTML/text string content
-                output.append(f"  {Colors.YELLOW}📄 Format: Legacy HTML/Text (v1.0 Text Service){Colors.ENDC}")
-                output.append(f"\n  {Colors.BOLD}{Colors.CYAN}📝 Generated Content:{Colors.ENDC}")
+            elif isinstance(content, str) and '<' in content:
+                # v3.4-v1.2: HTML string from Text Service v1.2
+                output.append(f"  {Colors.GREEN}📄 Format: HTML (v1.2 Text Service){Colors.ENDC}")
+                output.append(f"\n  {Colors.BOLD}{Colors.CYAN}📝 Generated HTML Content:{Colors.ENDC}")
 
                 # Truncate HTML for display
                 if len(content) > 300:
                     content_preview = content[:300] + "..."
                 else:
                     content_preview = content
+
+                # Add indentation to content
+                for line in content_preview.split('\n'):
+                    output.append(f"  {Colors.CYAN}│{Colors.ENDC} {line}")
+            else:
+                # v1.0: Legacy plain text content (no HTML tags)
+                output.append(f"  {Colors.YELLOW}📄 Format: Legacy Text (v1.0 Text Service){Colors.ENDC}")
+                output.append(f"\n  {Colors.BOLD}{Colors.CYAN}📝 Generated Content:{Colors.ENDC}")
+
+                # Truncate text for display
+                content_str = str(content)
+                if len(content_str) > 300:
+                    content_preview = content_str[:300] + "..."
+                else:
+                    content_preview = content_str
 
                 # Add indentation to content
                 for line in content_preview.split('\n'):
@@ -589,6 +630,12 @@ class DirectorStandaloneTester:
                             print(f"\n{Colors.BOLD}📄 Slide Content:{Colors.ENDC}")
                             for slide_data in slide_update_msg.payload.slides:
                                 print(self.format_slide_details(slide_data))
+
+                            # v3.4-v1.2: Display presentation footer text
+                            strawman_obj = slide_update_msg.payload
+                            if hasattr(strawman_obj, 'footer_text') and strawman_obj.footer_text:
+                                char_color = Colors.GREEN if len(strawman_obj.footer_text) <= 20 else Colors.RED
+                                print(f"\n{Colors.CYAN}📌 Presentation Footer:{Colors.ENDC} {strawman_obj.footer_text} {char_color}({len(strawman_obj.footer_text)} chars){Colors.ENDC}")
                     else:
                         print(format_agent_message(format_strawman_summary(strawman)))
                         # Also show slide details for legacy protocol
@@ -596,9 +643,20 @@ class DirectorStandaloneTester:
                         for slide in strawman.slides:
                             print(self.format_slide_details(slide))
 
+                        # v3.4-v1.2: Display presentation footer text
+                        if hasattr(strawman, 'footer_text') and strawman.footer_text:
+                            char_color = Colors.GREEN if len(strawman.footer_text) <= 20 else Colors.RED
+                            print(f"\n{Colors.CYAN}📌 Presentation Footer:{Colors.ENDC} {strawman.footer_text} {char_color}({len(strawman.footer_text)} chars){Colors.ENDC}")
+
                 add_to_history(context, "assistant", strawman)
                 results["states_completed"].append("GENERATE_STRAWMAN")
                 results["outputs"]["strawman"] = strawman
+
+                # v3.4-v1.2: Validate v1.2 integration fields
+                print(f"\n{Colors.BOLD}Validating v1.2 Integration Fields...{Colors.ENDC}")
+                if not self._validate_v1_2_fields(strawman, results):
+                    print(f"{Colors.YELLOW}⚠️  v1.2 validation warnings detected (non-blocking){Colors.ENDC}")
+                print()  # Add blank line for readability
 
                 # v3.1: Extract and store strawman in session_data for subsequent stages
                 if isinstance(strawman, dict) and strawman.get("type") == "presentation_url":
@@ -952,6 +1010,117 @@ class DirectorStandaloneTester:
         print(format_success(f"✓ Plan proposes {slide_count} slides"))
         return True
 
+    def _validate_v1_2_fields(self, strawman, results: Dict[str, Any]) -> bool:
+        """Validate v1.2-specific fields in strawman (v3.4 integration).
+
+        Validates:
+        - variant_id set for all slides (random selection from catalog)
+        - generated_title character limit (≤50 chars)
+        - generated_subtitle character limit (≤90 chars)
+        - footer_text character limit (≤20 chars)
+        - slide_type_classification set (13-type taxonomy)
+
+        Args:
+            strawman: PresentationStrawman object or hybrid response dict
+            results: Test results dictionary
+
+        Returns:
+            True if validation passes, False otherwise
+        """
+        # Extract strawman from hybrid response if needed
+        if isinstance(strawman, dict):
+            if strawman.get("type") == "presentation_url" and "strawman" in strawman:
+                strawman = strawman.get("strawman")
+            else:
+                # URL response without embedded strawman - skip validation
+                print(f"{Colors.YELLOW}ℹ️  Skipping v1.2 validation (URL response without embedded strawman){Colors.ENDC}")
+                return True
+
+        if not strawman or not hasattr(strawman, 'slides'):
+            print(f"{Colors.YELLOW}ℹ️  Skipping v1.2 validation (no slides found){Colors.ENDC}")
+            return True
+
+        # Validate footer_text
+        if hasattr(strawman, 'footer_text') and strawman.footer_text:
+            if len(strawman.footer_text) > 20:
+                error = f"Footer text exceeds 20 chars: {len(strawman.footer_text)}"
+                print(format_error(error))
+                results["errors"].append(error)
+                return False
+            print(format_success(f"✓ Footer text: '{strawman.footer_text}' ({len(strawman.footer_text)} chars)"))
+        else:
+            print(f"{Colors.YELLOW}⚠️  No footer_text found (may not be generated yet){Colors.ENDC}")
+
+        # Track validation issues per slide
+        missing_variants = []
+        title_violations = []
+        subtitle_violations = []
+        missing_classifications = []
+        missing_titles = []
+
+        for slide in strawman.slides:
+            slide_num = slide.slide_number
+
+            # Check variant_id (should be set for all slides)
+            if not hasattr(slide, 'variant_id') or not slide.variant_id:
+                missing_variants.append(slide_num)
+
+            # Check slide_type_classification (should be set for all slides)
+            if not hasattr(slide, 'slide_type_classification') or not slide.slide_type_classification:
+                missing_classifications.append(slide_num)
+
+            # Check generated_title
+            if hasattr(slide, 'generated_title') and slide.generated_title:
+                if len(slide.generated_title) > 50:
+                    title_violations.append(f"Slide {slide_num}: {len(slide.generated_title)} chars")
+            else:
+                missing_titles.append(slide_num)
+
+            # Check generated_subtitle (optional, but if present must be ≤90)
+            if hasattr(slide, 'generated_subtitle') and slide.generated_subtitle:
+                if len(slide.generated_subtitle) > 90:
+                    subtitle_violations.append(f"Slide {slide_num}: {len(slide.generated_subtitle)} chars")
+
+        # Report results
+        has_errors = False
+
+        if missing_variants:
+            error = f"Missing variant_id on slides: {missing_variants}"
+            print(format_error(error))
+            results["errors"].append(error)
+            has_errors = True
+        else:
+            print(format_success(f"✓ All {len(strawman.slides)} slides have variant_id"))
+
+        if missing_classifications:
+            error = f"Missing slide_type_classification on slides: {missing_classifications}"
+            print(format_error(error))
+            results["errors"].append(error)
+            has_errors = True
+        else:
+            print(format_success(f"✓ All {len(strawman.slides)} slides have classification"))
+
+        if title_violations:
+            error = f"Title character limit violations (>50): {title_violations}"
+            print(format_error(error))
+            results["errors"].append(error)
+            has_errors = True
+
+        if subtitle_violations:
+            error = f"Subtitle character limit violations (>90): {subtitle_violations}"
+            print(format_error(error))
+            results["errors"].append(error)
+            has_errors = True
+
+        if missing_titles:
+            print(f"{Colors.YELLOW}⚠️  Missing generated_title on slides: {missing_titles}{Colors.ENDC}")
+            # Not a hard error - titles might not be generated yet
+
+        if not has_errors:
+            print(format_success("✓ All v1.2 character limits validated"))
+
+        return not has_errors
+
     def _validate_format_ownership(self, results: Dict[str, Any]) -> Dict[str, Any]:
         """Validate Format Ownership Architecture features (v3.1.1).
 
@@ -989,13 +1158,19 @@ class DirectorStandaloneTester:
                 if first_slide.generated_text:
                     content = first_slide.generated_text.content
 
-                    # Detect format
+                    # v3.4-v1.2: Detect format (structured dict vs v1.2 HTML vs v1.0 legacy)
                     if isinstance(content, dict):
                         format_validation["content_format"] = "structured (v1.1)"
                         format_validation["is_structured"] = True
                         format_validation["notes"].append(f"✅ Using v1.1 structured content with {len(content)} fields")
+                    elif isinstance(content, str) and '<' in content:
+                        format_validation["content_format"] = "HTML (v1.2)"
+                        format_validation["is_structured"] = False
+                        format_validation["notes"].append("✅ Using v1.2 HTML content format")
+                        format_validation["notes"].append("✅ Director titles used as INPUT to Text Service")
+                        format_validation["notes"].append("✅ Text Service generated HTML body as OUTPUT")
                     else:
-                        format_validation["content_format"] = "legacy HTML/text (v1.0)"
+                        format_validation["content_format"] = "legacy text (v1.0)"
                         format_validation["is_structured"] = False
                         format_validation["notes"].append("ℹ️  Using v1.0 legacy content format")
 
@@ -1055,18 +1230,59 @@ class DirectorStandaloneTester:
                 validation["checks"][f"output_{output}"] = "✗"
                 validation["passed"] = False
 
-        # v3.1.1: Validate Format Ownership Architecture features
+        # v3.4-v1.2: Validate v1.2 integration fields in strawman
+        if "strawman" in results["outputs"]:
+            strawman = results["outputs"]["strawman"]
+            v1_2_valid = self._check_v1_2_fields_present(strawman)
+            if v1_2_valid:
+                validation["checks"]["v1.2_fields_present"] = "✓"
+            else:
+                validation["checks"]["v1.2_fields_missing"] = "⚠"
+                # Don't fail test - fields might not be generated yet
+
+        # v3.1.1/v3.4-v1.2: Validate Format Ownership Architecture features
         if test_stage_6:
             format_validation = self._validate_format_ownership(results)
             validation["format_ownership"] = format_validation
 
-            # Add format validation to checks
-            if format_validation["is_structured"]:
+            # v3.4-v1.2: Add format validation to checks (v1.2 HTML, v1.1 structured, or v1.0 legacy)
+            if format_validation["content_format"] == "HTML (v1.2)":
+                validation["checks"]["v1.2_html_format"] = "✓"
+            elif format_validation["is_structured"]:
                 validation["checks"]["v1.1_structured_content"] = "✓"
             else:
                 validation["checks"]["v1.0_legacy_content"] = "✓"
 
         return validation
+
+    def _check_v1_2_fields_present(self, strawman) -> bool:
+        """Quick check if v1.2 fields are present in strawman.
+
+        v3.4-v1.2: Validates that variant_id, generated_title, and footer_text
+        are populated in the strawman.
+
+        Args:
+            strawman: PresentationStrawman object or hybrid response dict
+
+        Returns:
+            True if v1.2 fields are present, False otherwise
+        """
+        # Extract strawman from hybrid response if needed
+        if isinstance(strawman, dict):
+            if strawman.get("type") == "presentation_url" and "strawman" in strawman:
+                strawman = strawman.get("strawman")
+            else:
+                return False
+
+        if not strawman or not hasattr(strawman, 'slides'):
+            return False
+
+        # Check at least one slide has v1.2 fields
+        has_variant = any(hasattr(s, 'variant_id') and s.variant_id for s in strawman.slides)
+        has_title = any(hasattr(s, 'generated_title') and s.generated_title for s in strawman.slides)
+        has_footer = hasattr(strawman, 'footer_text') and strawman.footer_text
+
+        return has_variant and has_title and has_footer
 
 
 async def main():

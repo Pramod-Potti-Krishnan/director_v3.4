@@ -198,6 +198,41 @@ class TextServiceClientV1_2:
             logger.error(f"❌ v1.2 health check failed: {e}")
             return False
 
+    async def call_hero_endpoint(
+        self,
+        endpoint: str,
+        payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Call Text Service v1.2 hero slide endpoint.
+
+        Args:
+            endpoint: Hero endpoint path (e.g., "/v1.2/hero/title")
+            payload: Hero request payload
+
+        Returns:
+            Hero response dictionary with content and metadata
+        """
+        url = f"{self.base_url}{endpoint}"
+
+        try:
+            logger.info(f"Calling hero endpoint: {endpoint}")
+
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                result = response.json()
+
+                logger.info(f"✅ Hero endpoint {endpoint} returned successfully")
+                return result
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Hero endpoint HTTP error: {e.response.status_code}")
+            raise Exception(f"Hero endpoint error: {e.response.status_code}")
+        except Exception as e:
+            logger.error(f"Hero endpoint call failed: {str(e)}")
+            raise Exception(f"Hero endpoint failure: {str(e)}")
+
     async def get_variants(self) -> Dict[str, Any]:
         """
         Get all available variants from v1.2.

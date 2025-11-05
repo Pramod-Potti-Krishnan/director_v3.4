@@ -94,7 +94,7 @@ class HeroRequestTransformer:
         Raises:
             ValueError: If slide classification is not a hero slide type
         """
-        classification = slide.classification
+        classification = slide.slide_type_classification
 
         if not self.is_hero_slide(classification):
             raise ValueError(

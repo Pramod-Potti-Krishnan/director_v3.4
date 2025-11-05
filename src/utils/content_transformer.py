@@ -102,16 +102,13 @@ class ContentTransformer:
 
             # Fallback if layout_id not assigned (backward compatibility)
             if not layout_id:
-                logger.warning(f"Slide {slide.slide_number} has no layout_id (should not happen in v3.2+)")
+                logger.warning(f"Slide {slide.slide_number} has no layout_id (should not happen in v3.4+)")
+                # v3.4: Simplified to 2-layout system
                 # Determine position-based fallback
-                if idx == 0:
-                    layout_id = "L01"  # Title slide
-                elif idx == total_slides - 1:
-                    layout_id = "L03"  # Closing slide
-                elif slide.slide_type == "section_divider":
-                    layout_id = "L02"  # Section divider
+                if idx == 0 or idx == total_slides - 1 or slide.slide_type == "section_divider":
+                    layout_id = "L29"  # Hero slide
                 else:
-                    layout_id = "L05"  # Default to bullet list
+                    layout_id = "L25"  # Content slide
                 logger.info(f"Assigned fallback layout {layout_id} for slide {slide.slide_number}")
 
             # Get enriched slide data if available (v3.1)
@@ -167,30 +164,191 @@ class ContentTransformer:
                                presentation: PresentationStrawman,
                                enriched_slide=None) -> Dict[str, Any]:
         """
-        Map v1.0 slide fields to deck-builder content fields.
+        Map slide content to L25 or L29 format.
 
+        v3.4: Simplified for 2-layout system (L25 and L29 only).
         v3.1: Supports enriched_slide parameter for injecting generated text.
         """
+        if layout_id == "L29":
+            return self._map_hero_slide(slide, content_fields, presentation, enriched_slide)
+        elif layout_id == "L25":
+            return self._map_content_slide(slide, content_fields, presentation, enriched_slide)
+        else:
+            logger.error(f"Unknown layout_id: {layout_id}, falling back to L25")
+            return self._map_content_slide(slide, content_fields, presentation, enriched_slide)
 
-        # Route to specific mapping function based on layout
-        mapping_functions = {
-            "L01": self._map_title_slide,
-            "L02": self._map_section_divider,
-            "L03": self._map_closing_slide,
-            "L04": self._map_text_summary,
-            "L05": self._map_bullet_list,
-            "L06": self._map_numbered_list,
-            "L10": self._map_image_text,
-            "L17": self._map_chart_insights
+    def _map_hero_slide(self, slide: Slide, fields: Dict,
+                       presentation: PresentationStrawman, enriched_slide=None) -> Dict[str, Any]:
+        """
+        Map to L29 - Full-Bleed Hero (v3.4).
+
+        L29 is used for:
+        - Opening slide (maximum impact)
+        - Closing slide (memorable finish)
+        - Section dividers (dramatic transitions)
+
+        Args:
+            slide: The slide to map
+            fields: Schema fields for L29 (hero_content)
+            presentation: Full presentation context
+            enriched_slide: Optional enriched slide with generated content from text service
+
+        Returns:
+            Dict with hero_content field (HTML from text_service)
+        """
+        # Check if we have generated content from text service
+        if enriched_slide and enriched_slide.generated_text and not enriched_slide.has_text_failure:
+            generated_content = enriched_slide.generated_text.content
+
+            # Structured content (Text Service v1.1+) - should have hero_content field
+            if self._is_structured_content(generated_content):
+                logger.info(f"Using structured content for L29 hero slide: {slide.slide_id}")
+                return {
+                    "hero_content": generated_content.get("hero_content", generated_content.get("rich_content", ""))
+                }
+
+            # Legacy HTML/text string (Text Service v1.0) - use as-is for hero_content
+            logger.info(f"Using legacy HTML for L29 hero slide: {slide.slide_id}")
+            return {
+                "hero_content": generated_content
+            }
+
+        # Fallback: Create simple HTML placeholder from slide content
+        logger.info(f"Creating placeholder content for L29 hero slide: {slide.slide_id}")
+
+        # Build hero content HTML with proper styling for centering and visual appeal
+        hero_html_parts = []
+
+        # Add title as main heading with styling
+        if slide.title:
+            hero_html_parts.append(
+                f"<h1 style='font-size: 72px; font-weight: bold; color: #1f2937; "
+                f"margin: 0 0 24px 0; line-height: 1.2;'>{slide.title}</h1>"
+            )
+
+        # Add narrative as subtitle if present with styling
+        if slide.narrative:
+            hero_html_parts.append(
+                f"<p style='font-size: 32px; color: #6b7280; margin: 0; "
+                f"max-width: 80%; line-height: 1.5;'>{slide.narrative}</p>"
+            )
+
+        # Join all parts and wrap in centered container div
+        inner_content = "\n".join(hero_html_parts) if hero_html_parts else "<h1>Hero Slide</h1>"
+        hero_content = f"""
+<div style="display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; height: 100%; padding: 60px;">
+{inner_content}
+</div>
+"""
+
+        return {
+            "hero_content": hero_content
         }
 
-        mapper = mapping_functions.get(layout_id)
-        if mapper:
-            # Pass enriched_slide to mapper functions
-            return mapper(slide, content_fields, presentation, enriched_slide)
-        else:
-            logger.warning(f"No specific mapper for {layout_id}, using generic mapping")
-            return self._map_generic(slide, content_fields, enriched_slide)
+    def _map_content_slide(self, slide: Slide, fields: Dict,
+                          presentation: PresentationStrawman, enriched_slide=None) -> Dict[str, Any]:
+        """
+        Map to L25 - Main Content Shell (v3.4-v1.2).
+
+        L25 is the workhorse layout for all content slides with:
+        - slide_title (plain text, layout_builder) ← FROM DIRECTOR (generated_title)
+        - subtitle (optional, plain text, layout_builder) ← FROM DIRECTOR (generated_subtitle)
+        - rich_content (HTML, text_service) - 1800×720px area ← FROM TEXT SERVICE v1.2
+        - presentation_name (footer) ← FROM DIRECTOR (footer_text)
+        - company_logo (footer)
+
+        v3.4-v1.2 Update:
+        - Use slide.generated_title for slide_title (Director-generated, max 50 chars)
+        - Use slide.generated_subtitle for subtitle (Director-generated, max 90 chars)
+        - Use presentation.footer_text for presentation_name (Director-generated, max 20 chars)
+        - Use enriched_slide HTML from Text Service v1.2 for rich_content
+
+        Args:
+            slide: The slide to map (with generated_title, generated_subtitle)
+            fields: Schema fields for L25
+            presentation: Full presentation context (with footer_text)
+            enriched_slide: Optional enriched slide with v1.2 HTML content
+
+        Returns:
+            Dict with all L25 fields
+        """
+        # v3.4-v1.2: Use Director's generated titles (character limits already enforced)
+        slide_title = slide.generated_title or slide.title
+        subtitle = slide.generated_subtitle or ""
+        footer = presentation.footer_text or presentation.main_title
+
+        # Check if we have generated content from text service v1.2
+        if enriched_slide and enriched_slide.generated_text and not enriched_slide.has_text_failure:
+            generated_content = enriched_slide.generated_text.content
+
+            # v1.2: HTML string (complete HTML for rich_content area)
+            if isinstance(generated_content, str):
+                logger.info(f"Using v1.2 HTML for L25 content slide: {slide.slide_id}")
+                result = {
+                    "slide_title": slide_title,  # Director's generated_title
+                    "rich_content": generated_content  # v1.2's complete HTML
+                }
+
+                # Add optional fields
+                if 'subtitle' in fields:
+                    result["subtitle"] = subtitle  # Director's generated_subtitle
+                if 'presentation_name' in fields:
+                    result["presentation_name"] = footer  # Director's footer_text
+                if 'company_logo' in fields:
+                    result["company_logo"] = ""  # Empty for now
+
+                return result
+
+            # Legacy: Structured content (Text Service v1.1) - backward compatibility
+            if self._is_structured_content(generated_content):
+                logger.info(f"Using structured content (v1.1) for L25 content slide: {slide.slide_id}")
+                result = {
+                    "slide_title": slide_title,  # Director's generated_title (override v1.1)
+                    "rich_content": generated_content.get("rich_content", "")
+                }
+
+                # Optional fields
+                if 'subtitle' in fields:
+                    result["subtitle"] = subtitle  # Director's generated_subtitle
+                if 'presentation_name' in fields:
+                    result["presentation_name"] = footer  # Director's footer_text
+                if 'company_logo' in fields:
+                    result["company_logo"] = ""
+
+                return result
+
+        # Fallback: Create placeholder content from slide data
+        logger.info(f"Creating placeholder content for L25 content slide: {slide.slide_id}")
+
+        # Build rich_content HTML from slide narrative and key points
+        rich_content_parts = []
+
+        if slide.narrative:
+            rich_content_parts.append(f"<p style='font-size: 20px; line-height: 1.5;'>{slide.narrative}</p>")
+
+        if slide.key_points:
+            rich_content_parts.append("<ul style='font-size: 20px; line-height: 1.5;'>")
+            for point in slide.key_points[:6]:  # Limit to 6 points
+                rich_content_parts.append(f"<li>{point}</li>")
+            rich_content_parts.append("</ul>")
+
+        rich_content = "\n".join(rich_content_parts) if rich_content_parts else "<p>Content placeholder</p>"
+
+        result = {
+            "slide_title": slide_title,  # Director's generated_title or fallback
+            "rich_content": rich_content
+        }
+
+        # Add optional fields
+        if 'subtitle' in fields:
+            result["subtitle"] = subtitle  # Director's generated_subtitle or empty
+        if 'presentation_name' in fields:
+            result["presentation_name"] = footer  # Director's footer_text or fallback
+        if 'company_logo' in fields:
+            result["company_logo"] = ""  # Empty for now
+
+        return result
 
     def _map_title_slide(self, slide: Slide, fields: Dict,
                         presentation: PresentationStrawman, enriched_slide=None) -> Dict[str, Any]:

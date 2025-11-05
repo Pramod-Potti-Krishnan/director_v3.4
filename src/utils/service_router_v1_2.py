@@ -175,19 +175,18 @@ class ServiceRouterV1_2:
                         total_generation_time += duration
 
                         # Build successful result
+                        # v3.4 fix: Use flat structure like content slides for consistency
                         slide_result = {
                             "slide_number": slide_number,
                             "slide_id": slide.slide_id,
-                            "content": {
-                                "html": hero_response["content"],
-                                "metadata": hero_response["metadata"]
-                            },
+                            "content": hero_response["content"],  # HTML string directly
+                            "metadata": hero_response["metadata"],  # Top-level metadata
                             "generation_time_ms": int(duration * 1000),
                             "endpoint_used": hero_request_data["endpoint"],
                             "slide_type": "hero"
                         }
 
-                        successful_slides.append(slide_result)
+                        generated_slides.append(slide_result)
                         logger.info(
                             f"✅ Hero slide {slide_number} generated successfully "
                             f"({duration:.2f}s)"

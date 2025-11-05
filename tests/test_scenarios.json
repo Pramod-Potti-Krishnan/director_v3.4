@@ -2,8 +2,8 @@
   "validation_rules": {
     "min_questions": 3,
     "max_questions": 7,
-    "min_slides": 5,
-    "max_slides": 20,
+    "min_slides": 3,
+    "max_slides": 5,
     "required_slide_fields": [
       "slide_id",
       "slide_number",
@@ -21,21 +21,21 @@
   },
   "scenarios": {
     "default": {
-      "name": "AI in Healthcare",
-      "description": "Standard presentation about AI applications in healthcare",
-      "expected_slides": 10,
-      "expected_structure": ["title", "agenda", "content", "content", "content", "content", "content", "content", "conclusion", "thank_you"],
+      "name": "AI in Healthcare (Quick 3-Slide Test)",
+      "description": "Fast 10-minute presentation with 3 slides optimized for testing",
+      "expected_slides": 3,
+      "expected_structure": ["title", "content", "conclusion"],
       "responses": {
         "initial_topic": "I need a presentation about AI in healthcare, focusing on diagnostic applications and patient outcomes.",
         "clarifying_answers": [
           "The audience will be healthcare professionals at a medical conference",
           "They have basic understanding of AI but want practical applications",
-          "The presentation should be about 20 minutes long",
+          "The presentation should be about 10 minutes long",
           "Focus on recent case studies and real-world implementations",
           "Include both benefits and challenges"
         ],
         "plan_response": "Yes, this looks good. Please proceed with creating the presentation.",
-        "refinement_request": "Can you add more details about regulatory considerations and data privacy in the implementation section?",
+        "refinement_request": "Can you add more emphasis on patient outcomes in the diagnostic applications slide?",
         "strawman_acceptance": "Looks good, we're done. Let's proceed with layout generation.",
         "expected_theme": {
           "theme_name": "Healthcare Innovation",
@@ -47,7 +47,7 @@
           "accent_color": "#4A90E2",
           "background_style": "gradient"
         },
-        "expected_layout_types": ["title_slide", "agenda", "two_column", "visual_focus", "comparison", "data_visualization", "case_study", "challenges", "conclusion", "thank_you"]
+        "expected_layout_types": ["title_slide", "two_column", "conclusion"]
       }
     },
     "executive": {

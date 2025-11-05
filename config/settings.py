@@ -91,17 +91,22 @@ class Settings(BaseSettings):
     USE_LEGACY_WORKFLOW: bool = Field(False, env="USE_LEGACY_WORKFLOW")
 
     # v2.0: Deck-Builder Integration
+    # v3.4: Updated for v7.5-main (port 8504)
     DECK_BUILDER_ENABLED: bool = Field(True, env="DECK_BUILDER_ENABLED")
-    DECK_BUILDER_API_URL: str = Field("http://localhost:8000", env="DECK_BUILDER_API_URL")
+    DECK_BUILDER_API_URL: str = Field("http://localhost:8504", env="DECK_BUILDER_API_URL")
     DECK_BUILDER_TIMEOUT: int = Field(30, env="DECK_BUILDER_TIMEOUT")
 
     # v3.1: Text Service Integration (Stage 6 - Content Generation)
+    # v3.4-v1.2: Updated to Text Service v1.2 with 34 platinum variants
     TEXT_SERVICE_ENABLED: bool = Field(True, env="TEXT_SERVICE_ENABLED")
     TEXT_SERVICE_URL: str = Field(
-        "https://web-production-e3796.up.railway.app",
+        "https://web-production-5daf.up.railway.app",  # v1.2 Railway deployment
         env="TEXT_SERVICE_URL"
     )
-    TEXT_SERVICE_TIMEOUT: int = Field(60, env="TEXT_SERVICE_TIMEOUT")
+    TEXT_SERVICE_VERSION: str = Field("1.2", env="TEXT_SERVICE_VERSION")
+    TEXT_SERVICE_TIMEOUT: int = Field(300, env="TEXT_SERVICE_TIMEOUT")  # Increased for v1.2
+    TEXT_SERVICE_VALIDATE_COUNTS: bool = Field(True, env="TEXT_SERVICE_VALIDATE_COUNTS")
+    TEXT_SERVICE_PARALLEL_MODE: bool = Field(True, env="TEXT_SERVICE_PARALLEL_MODE")
 
     class Config:
         env_file = ".env"

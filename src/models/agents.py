@@ -54,6 +54,45 @@ class ConfirmationPlan(BaseModel):
     proposed_slide_count: int = Field(ge=2, le=30)  # Allow as few as 2 slides for short presentations
 
 
+class ContentGuidance(BaseModel):
+    """
+    Content generation guidance for specialized text generators (v3.4).
+
+    Provides semantic and structural metadata to guide content generation
+    for the 13 specialized slide types in Text Service v1.1.
+    """
+    content_type: str = Field(
+        description="Primary content category: 'narrative', 'data', 'quote', 'comparison', 'process', etc."
+    )
+    visual_complexity: str = Field(
+        description="Visual layout complexity: 'simple', 'moderate', 'complex'"
+    )
+    content_density: str = Field(
+        description="Information density: 'minimal', 'balanced', 'dense'"
+    )
+    tone_indicator: str = Field(
+        description="Presentation tone: 'professional', 'inspirational', 'analytical', 'conversational', etc."
+    )
+    data_type: Optional[str] = Field(
+        default=None,
+        description="Type of data if applicable: 'metrics', 'statistics', 'comparisons', 'timeline', etc."
+    )
+    emphasis_hierarchy: List[str] = Field(
+        default_factory=list,
+        description="Ordered list of content elements by importance (e.g., ['main_message', 'supporting_data', 'details'])"
+    )
+    relationship_to_previous: Optional[str] = Field(
+        default=None,
+        description="How this slide relates to previous content: 'continuation', 'contrast', 'deep_dive', 'new_section', etc."
+    )
+    generation_instructions: str = Field(
+        description="Specific instructions for content generator (e.g., 'emphasize quantitative impact', 'use conversational tone')"
+    )
+    pattern_rationale: str = Field(
+        description="Explanation of why this slide_type was chosen and how content should be structured"
+    )
+
+
 class Slide(BaseModel):
     """Simplified slide model focused on content guidance."""
     slide_number: int
@@ -72,6 +111,23 @@ class Slide(BaseModel):
         "conclusion_slide"
     ]
 
+    # v3.4: 13-type taxonomy classification for specialized generators
+    slide_type_classification: Optional[str] = Field(
+        default=None,
+        description="Classified slide type from 13-type taxonomy (3 hero + 10 content). "
+                    "Hero types: title_slide, section_divider, closing_slide. "
+                    "Content types: bilateral_comparison, sequential_3col, impact_quote, metrics_grid, "
+                    "matrix_2x2, grid_3x3, asymmetric_8_4, hybrid_1_2x2, single_column, styled_table. "
+                    "Used to route to specialized Text Service v1.1 endpoints."
+    )
+
+    # v3.4: Content generation guidance for specialized generators
+    content_guidance: Optional[ContentGuidance] = Field(
+        default=None,
+        description="Semantic and structural guidance for content generation. "
+                    "Provides context to specialized text generators about tone, density, emphasis, etc."
+    )
+
     # v3.1: Pre-selected layout ID (assigned during GENERATE_STRAWMAN)
     layout_id: Optional[str] = Field(
         default=None,
@@ -84,6 +140,28 @@ class Slide(BaseModel):
     layout_selection_reasoning: Optional[str] = Field(
         default=None,
         description="Explanation of why this layout was selected by AI semantic matching"
+    )
+
+    # v3.4-v1.2: Random variant selection from Text Service v1.2
+    variant_id: Optional[str] = Field(
+        default=None,
+        description="Randomly selected variant from Text Service v1.2's 34 platinum variants. "
+                    "Examples: 'matrix_2x3', 'grid_3x3_icons', 'comparison_3col'. "
+                    "Selected with equal probability from available variants for slide type."
+    )
+
+    # v3.4-v1.2: Director-generated titles with strict character limits
+    generated_title: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="Director-generated slide title (max 50 chars). "
+                    "Used as INPUT to Text Service v1.2 for context and as slide_title in Layout Builder."
+    )
+    generated_subtitle: Optional[str] = Field(
+        default=None,
+        max_length=90,
+        description="Director-generated slide subtitle (max 90 chars). "
+                    "Used as subtitle in Layout Builder L25 slides."
     )
 
     # Core content
@@ -149,7 +227,15 @@ class PresentationStrawman(BaseModel):
     presentation_duration: int = Field(
         description="Expected duration in minutes"
     )
-    
+
+    # v3.4-v1.2: Director-generated footer text
+    footer_text: Optional[str] = Field(
+        default=None,
+        max_length=20,
+        description="Common footer text across all slides (max 20 chars). "
+                    "Used as presentation_name in Layout Builder L25 slides."
+    )
+
     # Computed properties
     @property
     def total_slides(self) -> int:

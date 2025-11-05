@@ -11,14 +11,18 @@ from pydantic_ai.exceptions import ModelHTTPError
 # v3.3: Removed GoogleModel and GoogleProvider - now using Vertex AI with ADC
 from src.models.agents import (
     StateContext, ClarifyingQuestions, ConfirmationPlan,
-    PresentationStrawman, Slide
+    PresentationStrawman, Slide, ContentGuidance
 )
 from src.models.layout_selection import LayoutSelection  # v3.2: AI layout selection
 from src.utils.logger import setup_logger
+from src.utils.slide_type_classifier import SlideTypeClassifier  # v3.4: Slide classification
 from src.utils.logfire_config import instrument_agents
 from src.utils.context_builder import ContextBuilder
 from src.utils.token_tracker import TokenTracker
 from src.utils.asset_formatter import AssetFormatter
+# v3.4-v1.2: Text Service v1.2 integration
+from src.utils.variant_catalog import VariantCatalog
+from src.utils.variant_selector import VariantSelector
 # v2.0: Deck-builder integration
 # v3.2: LayoutMapper removed - replaced by LayoutSchemaManager
 from src.utils.layout_schema_manager import LayoutSchemaManager  # v3.2: Schema-driven architecture
@@ -114,7 +118,7 @@ class DirectorAgent:
             try:
                 from src.utils.text_service_client import TextServiceClient
                 text_service_url = getattr(settings, 'TEXT_SERVICE_URL',
-                    'https://web-production-e3796.up.railway.app')
+                    'https://web-production-5daf.up.railway.app')  # v1.2 URL
                 self.text_client = TextServiceClient(text_service_url)
                 logger.info(f"Text Service integration enabled: {text_service_url}")
             except Exception as e:
@@ -123,6 +127,17 @@ class DirectorAgent:
                 self.text_service_enabled = False
         else:
             logger.info("Text Service integration disabled in settings")
+
+        # v3.4-v1.2: Initialize variant catalog and selector for Text Service v1.2
+        self.variant_catalog = None
+        self.variant_selector = None
+        # Store text service URL for variant catalog loading
+        self.text_service_url = getattr(settings, 'TEXT_SERVICE_URL',
+            'https://web-production-5daf.up.railway.app')
+        logger.info(f"Text Service v1.2 URL configured: {self.text_service_url}")
+
+        # v3.4-v1.2: Store title generation model
+        self.title_generation_model = f'google-vertex:{settings.GCP_MODEL_STRAWMAN}'  # Use strawman model
 
         logger.info("DirectorAgent initialized with 6 individual Gemini models (granular per-stage configuration)")
 
@@ -313,9 +328,28 @@ class DirectorAgent:
                 logger.info("Applied asset field formatting to strawman")
 
                 # v3.2: AI-powered semantic layout selection
+                # v3.4: Added slide classification and content guidance generation
                 total_slides = len(strawman.slides)
-                logger.info(f"Starting AI-powered layout selection for {total_slides} slides")
+                logger.info(f"Starting AI-powered layout selection and classification for {total_slides} slides")
 
+                # v3.4-v1.2: Load variant catalog and initialize selector
+                logger.info("Loading v1.2 variant catalog for random variant selection")
+                try:
+                    if not self.variant_catalog:
+                        self.variant_catalog = VariantCatalog(self.text_service_url)
+                        await self.variant_catalog.load_catalog()
+                        logger.info(f"✅ Loaded variant catalog with {self.variant_catalog.get_total_variants()} variants")
+
+                    if not self.variant_selector:
+                        self.variant_selector = VariantSelector(self.variant_catalog)
+                        logger.info("✅ Initialized variant selector for random selection")
+                except Exception as e:
+                    logger.error(f"❌ Variant catalog loading failed: {str(e)}", exc_info=True)
+                    logger.error(f"   Attempted URL: {self.text_service_url}/v1.2/variants")
+                    logger.warning("⚠️  Will use fallback default variants instead")
+                    # Don't initialize variant_selector - this triggers fallback logic in slide processing
+
+                previous_slide_type = None
                 for idx, slide in enumerate(strawman.slides):
                     # Determine slide position
                     if idx == 0:
@@ -335,12 +369,97 @@ class DirectorAgent:
                     # Assign selected layout and reasoning to slide
                     slide.layout_id = layout_selection.layout_id
                     slide.layout_selection_reasoning = layout_selection.reasoning
+
+                    # v3.4: Classify slide into 13-type taxonomy
+                    slide_type_classification = SlideTypeClassifier.classify(
+                        slide=slide,
+                        position=idx + 1,  # 1-indexed position
+                        total_slides=total_slides
+                    )
+                    slide.slide_type_classification = slide_type_classification
+
+                    # v3.4: Generate content guidance for specialized text generators
+                    content_guidance = self._generate_content_guidance(
+                        slide=slide,
+                        slide_type_classification=slide_type_classification,
+                        position=idx + 1,
+                        total_slides=total_slides,
+                        previous_slide_type=previous_slide_type
+                    )
+                    slide.content_guidance = content_guidance
+
+                    # v3.4-v1.2: Select random variant from available options
+                    if self.variant_selector and slide_type_classification:
+                        try:
+                            variant_id = self.variant_selector.select_variant(slide_type_classification)
+                            slide.variant_id = variant_id
+                            logger.debug(f"Selected variant '{variant_id}' for slide {slide.slide_number}")
+                        except Exception as e:
+                            logger.error(f"Variant selection failed for slide {slide.slide_number}: {e}")
+                            # Fallback to default variant
+                            from src.utils.slide_type_mapper import SlideTypeMapper
+                            fallback = SlideTypeMapper.get_default_variant(slide_type_classification)
+                            slide.variant_id = fallback
+                            logger.warning(f"Using fallback variant '{fallback}' for slide {slide.slide_number}")
+                    elif slide_type_classification:
+                        # No variant selector available - use fallback defaults
+                        from src.utils.slide_type_mapper import SlideTypeMapper
+                        fallback = SlideTypeMapper.get_default_variant(slide_type_classification)
+                        slide.variant_id = fallback
+                        logger.info(f"Variant catalog unavailable, using default variant '{fallback}' for slide {slide.slide_number}")
+
+                    # v3.4-v1.2: Generate slide title with LLM (50 char limit)
+                    try:
+                        generated_title = await self._generate_slide_title(
+                            original_title=slide.title,
+                            narrative=slide.narrative or "",
+                            max_chars=50
+                        )
+                        slide.generated_title = generated_title
+                        logger.debug(f"Generated title for slide {slide.slide_number}: '{generated_title}'")
+                    except Exception as e:
+                        logger.error(f"Title generation failed for slide {slide.slide_number}: {e}")
+                        slide.generated_title = slide.title[:50]  # Fallback to truncated original
+
+                    # v3.4-v1.2: Generate slide subtitle with LLM (90 char limit)
+                    try:
+                        key_message = slide.key_points[0] if slide.key_points else None
+                        generated_subtitle = await self._generate_slide_subtitle(
+                            narrative=slide.narrative or "",
+                            key_message=key_message,
+                            max_chars=90
+                        )
+                        slide.generated_subtitle = generated_subtitle
+                        logger.debug(f"Generated subtitle for slide {slide.slide_number}: '{generated_subtitle}'")
+                    except Exception as e:
+                        logger.error(f"Subtitle generation failed for slide {slide.slide_number}: {e}")
+                        slide.generated_subtitle = ""  # Fallback to empty
+
                     logger.info(
                         f"Slide {slide.slide_number} '{slide.title}': "
-                        f"{layout_selection.layout_id} - {layout_selection.reasoning}"
+                        f"Layout={layout_selection.layout_id}, "
+                        f"Type={slide_type_classification}, "
+                        f"Variant={slide.variant_id}, "
+                        f"Complexity={content_guidance.visual_complexity}"
                     )
 
-                logger.info(f"✅ Assigned purpose-driven layouts to all {total_slides} slides")
+                    # Track previous slide type for relationship analysis
+                    previous_slide_type = slide_type_classification
+
+                logger.info(f"✅ Assigned layouts, classifications, and content guidance to all {total_slides} slides")
+
+                # v3.4-v1.2: Generate presentation footer text (20 char limit)
+                try:
+                    logger.info("Generating presentation footer text")
+                    generated_footer = await self._generate_footer_text(
+                        presentation_title=strawman.main_title,
+                        max_chars=20
+                    )
+                    strawman.footer_text = generated_footer
+                    logger.info(f"Generated footer: '{generated_footer}' ({len(generated_footer)} chars)")
+                except Exception as e:
+                    logger.error(f"Footer generation failed: {e}")
+                    strawman.footer_text = strawman.main_title[:20]  # Fallback to truncated title
 
                 # v2.0: Transform and send to deck-builder API
                 if self.deck_builder_enabled:
@@ -374,12 +493,36 @@ class DirectorAgent:
 
             elif state_context.current_state == "REFINE_STRAWMAN":
                 logger.info("Refining strawman presentation")
+
+                # v3.4-v1.2: Get original strawman to preserve v1.2 fields
+                original_strawman_data = state_context.session_data.get("presentation_strawman")
+                if not original_strawman_data:
+                    logger.error("No original strawman found in session_data")
+                    raise ValueError("Cannot refine: No original strawman found in session")
+
+                # Reconstruct original strawman
+                original_strawman = PresentationStrawman(**original_strawman_data)
+                logger.info(f"Retrieved original strawman with {len(original_strawman.slides)} slides")
+
+                # Generate refinements using LLM
                 result = await self.refine_strawman_agent.run(
                     user_prompt,
                     model_settings=ModelSettings(temperature=0.4, max_tokens=8000)
                 )
-                strawman = result.output  # PresentationStrawman object
-                logger.info(f"Refined strawman with {len(strawman.slides)} slides")
+                refined_strawman = result.output  # PresentationStrawman object
+                logger.info(f"Generated refined strawman with {len(refined_strawman.slides)} slides")
+
+                # v3.4-v1.2: Merge refined with original, preserving v1.2 fields
+                strawman = self._merge_refined_strawman(
+                    original=original_strawman,
+                    refined=refined_strawman,
+                    user_refinement_request=user_prompt
+                )
+                logger.info("Merged refined strawman with original (v1.2 fields preserved)")
+
+                # v3.4-v1.2: Regenerate v1.2 fields for modified slides only
+                await self._regenerate_v1_2_fields_for_modified_slides(strawman, original_strawman)
+                logger.info(f"Regenerated v1.2 fields for modified slides")
 
                 # Post-process to ensure asset fields are in correct format
                 strawman = AssetFormatter.format_strawman(strawman)
@@ -416,8 +559,8 @@ class DirectorAgent:
                     response = strawman
 
             elif state_context.current_state == "CONTENT_GENERATION":
-                # v3.1: Stage 6 - Text Service content generation
-                logger.info("Starting Stage 6: Content Generation (Text only)")
+                # v3.4-v1.2: Stage 6 - Text Service v1.2 with unified endpoint
+                logger.info("Starting Stage 6: Content Generation (Text Service v1.2)")
 
                 # Get strawman from session
                 strawman_data = state_context.session_data.get("presentation_strawman")
@@ -425,65 +568,147 @@ class DirectorAgent:
                     raise ValueError("No strawman found in session for content generation")
 
                 strawman = PresentationStrawman(**strawman_data)
-                logger.info(f"Processing {len(strawman.slides)} slides for text generation")
+                logger.info(f"Processing {len(strawman.slides)} slides with v1.2 routing")
 
-                # Import content models
+                # Validate slides have classifications
+                unclassified = [s for s in strawman.slides if not s.slide_type_classification]
+                if unclassified:
+                    logger.error(f"{len(unclassified)} slides missing classification")
+                    raise ValueError(
+                        f"{len(unclassified)} slides are missing slide_type_classification. "
+                        "Ensure GENERATE_STRAWMAN stage completed successfully."
+                    )
+
+                # Import content models and v1.2 routing components
                 from src.models.content import EnrichedSlide, EnrichedPresentationStrawman
+                from src.utils.service_router_v1_2 import ServiceRouterV1_2
+                from src.utils.text_service_client_v1_2 import TextServiceClientV1_2
                 from datetime import datetime
 
-                # Generate text content for each slide
-                enriched_slides = []
-                successful_slides = 0
-                failed_slides = 0
-                start_time = datetime.utcnow()
+                # v3.4-v1.2: Initialize Text Service v1.2 client and router
+                logger.info("Initializing Text Service v1.2 client and router")
 
-                for idx, slide in enumerate(strawman.slides):
-                    try:
-                        logger.info(f"Generating text for slide {idx + 1}/{len(strawman.slides)}: {slide.slide_id}")
-                        generated_text = await self._generate_slide_text(
-                            slide,
-                            strawman,
-                            session_id,
-                            idx + 1
-                        )
-                        enriched_slides.append(EnrichedSlide(
-                            original_slide=slide,
-                            slide_id=slide.slide_id,
-                            generated_text=generated_text,
-                            has_text_failure=False
-                        ))
-                        successful_slides += 1
-                        logger.info(f"✅ Slide {idx + 1} text generated ({len(generated_text.content)} chars)")
-                    except Exception as e:
-                        logger.error(f"Text generation failed for slide {slide.slide_id}: {e}")
-                        enriched_slides.append(EnrichedSlide(
-                            original_slide=slide,
-                            slide_id=slide.slide_id,
-                            generated_text=None,
-                            has_text_failure=True
-                        ))
-                        failed_slides += 1
+                try:
+                    from config.settings import get_settings
+                    settings = get_settings()
 
-                generation_time = (datetime.utcnow() - start_time).total_seconds()
+                    # Initialize Text Service v1.2 client
+                    v1_2_client = TextServiceClientV1_2(
+                        base_url=settings.TEXT_SERVICE_URL,
+                        timeout=settings.TEXT_SERVICE_TIMEOUT
+                    )
+                    logger.info(f"v1.2 Client initialized: {settings.TEXT_SERVICE_URL}")
 
-                # Create enriched presentation
-                enriched_presentation = EnrichedPresentationStrawman(
-                    original_strawman=strawman,
-                    enriched_slides=enriched_slides,
-                    generation_metadata={
-                        "total_slides": len(strawman.slides),
-                        "successful_slides": successful_slides,
-                        "failed_slides": failed_slides,
-                        "generation_time_seconds": generation_time,
-                        "timestamp": datetime.utcnow().isoformat(),
-                        "service_used": "text_service_v1.0"
+                    # Create v1.2 router
+                    router = ServiceRouterV1_2(v1_2_client)
+                    logger.info("v1.2 Router initialized")
+
+                    # Route entire presentation through v1.2 unified endpoint
+                    start_time = datetime.utcnow()
+                    routing_result = await router.route_presentation(
+                        strawman=strawman,
+                        session_id=session_id
+                    )
+
+                    # Parse routing results
+                    generated_content = routing_result.get("generated_slides", [])
+                    failed_generations = routing_result.get("failed_slides", [])
+                    skipped_slides_list = routing_result.get("skipped_slides", [])
+                    routing_metadata = routing_result.get("metadata", {})
+
+                    logger.info(
+                        f"Routing complete: {routing_metadata.get('successful_count', 0)} successful, "
+                        f"{routing_metadata.get('failed_count', 0)} failed, "
+                        f"{routing_metadata.get('skipped_count', 0)} skipped"
+                    )
+
+                    # Build enriched slides from routing results
+                    enriched_slides = []
+                    successful_slides = 0
+                    failed_slides = 0
+                    skipped_slides = 0
+
+                    # Create lookup dicts for generated and skipped content
+                    generated_lookup = {
+                        gen.get("slide_id", gen.get("metadata", {}).get("slide_id")): gen
+                        for gen in generated_content
                     }
-                )
 
-                logger.info(f"Content generation complete: {successful_slides}/{len(strawman.slides)} successful")
+                    skipped_lookup = {
+                        skip.get("slide_id"): skip
+                        for skip in skipped_slides_list
+                    }
+
+                    # Match generated content to slides
+                    for slide in strawman.slides:
+                        if slide.slide_id in generated_lookup:
+                            # Successful generation
+                            generated = generated_lookup[slide.slide_id]
+                            enriched_slides.append(EnrichedSlide(
+                                original_slide=slide,
+                                slide_id=slide.slide_id,
+                                generated_text=generated,
+                                has_text_failure=False
+                            ))
+                            successful_slides += 1
+                        elif slide.slide_id in skipped_lookup:
+                            # Hero slide - skipped (uses title/subtitle only, NOT a failure)
+                            enriched_slides.append(EnrichedSlide(
+                                original_slide=slide,
+                                slide_id=slide.slide_id,
+                                generated_text=None,
+                                has_text_failure=False  # NOT a failure!
+                            ))
+                            skipped_slides += 1
+                            logger.info(
+                                f"Hero slide {slide.slide_id} skipped "
+                                f"(using generated_title/subtitle only)"
+                            )
+                        else:
+                            # Actual failed generation
+                            enriched_slides.append(EnrichedSlide(
+                                original_slide=slide,
+                                slide_id=slide.slide_id,
+                                generated_text=None,
+                                has_text_failure=True
+                            ))
+                            failed_slides += 1
+                            logger.warning(f"No generated content for slide {slide.slide_id}")
+
+                    generation_time = (datetime.utcnow() - start_time).total_seconds()
+
+                    # Create enriched presentation with v3.4-v1.2 metadata
+                    enriched_presentation = EnrichedPresentationStrawman(
+                        original_strawman=strawman,
+                        enriched_slides=enriched_slides,
+                        generation_metadata={
+                            "total_slides": len(strawman.slides),
+                            "successful_slides": successful_slides,
+                            "failed_slides": failed_slides,
+                            "skipped_slides": skipped_slides,
+                            "generation_time_seconds": generation_time,
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "service_used": "text_service_v1.2",
+                            "processing_mode": "sequential",
+                            "routing_metadata": routing_metadata
+                        }
+                    )
+
+                    logger.info(
+                        f"✅ Content generation complete: {successful_slides}/{len(strawman.slides)} successful, "
+                        f"{skipped_slides} skipped (hero slides) using Text Service v1.2"
+                    )
+
+                except Exception as e:
+                    logger.error(f"Service routing failed: {e}", exc_info=True)
+                    logger.warning("Text Service v1.2 routing unavailable, falling back to strawman")
+                    # Fallback: Create minimal enriched presentation or return None
+                    enriched_presentation = None
+                    successful_slides = 0
+                    failed_slides = len(strawman.slides)
 
                 # Send enriched presentation to Layout Architect
-                if self.deck_builder_enabled:
+                if self.deck_builder_enabled and enriched_presentation:
                     try:
                         deck_url = await self._send_enriched_to_layout_architect(enriched_presentation)
                         response = {
@@ -493,6 +718,7 @@ class DirectorAgent:
                             "content_generated": True,
                             "successful_slides": successful_slides,
                             "failed_slides": failed_slides,
+                            "skipped_slides": skipped_slides,
                             "message": f"Your presentation with generated content is ready! View it at: {deck_url}"
                         }
                         logger.info(f"✅ Stage 6 complete: {deck_url}")
@@ -510,9 +736,22 @@ class DirectorAgent:
                             "content_generated": False,
                             "message": f"Presentation created (fallback mode): {fallback_url}"
                         }
+                elif self.deck_builder_enabled and not enriched_presentation:
+                    # Text Service routing failed, use v2.0 approach
+                    logger.warning("No enriched content available, using v2.0 approach")
+                    api_payload = self.content_transformer.transform_presentation(strawman)
+                    api_response = await self.deck_builder_client.create_presentation(api_payload)
+                    fallback_url = self.deck_builder_client.get_full_url(api_response['url'])
+                    response = {
+                        "type": "presentation_url",
+                        "url": fallback_url,
+                        "slide_count": len(strawman.slides),
+                        "content_generated": False,
+                        "message": f"Presentation created (no text generation): {fallback_url}"
+                    }
                 else:
                     # Return enriched presentation object if deck-builder disabled
-                    response = enriched_presentation
+                    response = enriched_presentation if enriched_presentation else strawman
 
             else:
                 raise ValueError(f"Unknown state: {state_context.current_state}")
@@ -536,6 +775,492 @@ class DirectorAgent:
                 logger.error(f"Error processing state {state_context.current_state}: {error_msg}")
             raise
 
+    def _generate_content_guidance(
+        self,
+        slide: Slide,
+        slide_type_classification: str,
+        position: int,
+        total_slides: int,
+        previous_slide_type: str = None
+    ) -> ContentGuidance:
+        """
+        Generate ContentGuidance for a slide based on its classification and properties.
+
+        v3.4: Rule-based content guidance generation for specialized text generators.
+
+        Args:
+            slide: Slide object with narrative, key_points, etc.
+            slide_type_classification: Classified slide type from taxonomy
+            position: Slide position (1-indexed)
+            total_slides: Total slides in presentation
+            previous_slide_type: Type of previous slide for relationship analysis
+
+        Returns:
+            ContentGuidance object with generation metadata
+        """
+        # Determine content_type based on slide classification
+        content_type_map = {
+            # Hero types (L29)
+            "title_slide": "opening",
+            "section_divider": "transition",
+            "closing_slide": "conclusion",
+            # Content types (L25)
+            "bilateral_comparison": "comparison",
+            "sequential_3col": "process",
+            "impact_quote": "quote",
+            "metrics_grid": "data",
+            "matrix_2x2": "framework",
+            "grid_3x3": "framework",
+            "asymmetric_8_4": "narrative",
+            "hybrid_1_2x2": "mixed",
+            "single_column": "narrative",
+            "styled_table": "data"
+        }
+        content_type = content_type_map.get(slide_type_classification, "narrative")
+
+        # Determine visual_complexity based on slide type
+        complex_types = ["matrix_2x2", "grid_3x3", "hybrid_1_2x2", "styled_table"]
+        moderate_types = ["metrics_grid", "bilateral_comparison", "sequential_3col", "asymmetric_8_4"]
+        visual_complexity = (
+            "complex" if slide_type_classification in complex_types else
+            "moderate" if slide_type_classification in moderate_types else
+            "simple"
+        )
+
+        # Determine content_density based on key_points count
+        key_points_count = len(slide.key_points) if slide.key_points else 0
+        content_density = (
+            "dense" if key_points_count > 5 else
+            "balanced" if key_points_count > 2 else
+            "minimal"
+        )
+
+        # Determine tone_indicator from slide content
+        narrative_lower = slide.narrative.lower() if slide.narrative else ""
+        if any(word in narrative_lower for word in ["inspire", "motivate", "imagine", "transform"]):
+            tone = "inspirational"
+        elif any(word in narrative_lower for word in ["data", "metric", "analysis", "statistic"]):
+            tone = "analytical"
+        elif any(word in narrative_lower for word in ["quote", "said", "believe"]):
+            tone = "testimonial"
+        else:
+            tone = "professional"
+
+        # Determine data_type if applicable
+        data_type = None
+        if slide_type_classification in ["metrics_grid", "styled_table"]:
+            data_type = "metrics" if "metric" in slide_type_classification else "tabular"
+        elif slide_type_classification == "matrix_2x2":
+            data_type = "framework"
+        elif slide_type_classification == "sequential_3col":
+            data_type = "timeline"
+
+        # Build emphasis_hierarchy based on slide structure
+        emphasis_hierarchy = []
+        if slide.title:
+            emphasis_hierarchy.append("main_message")
+        if slide.key_points and len(slide.key_points) > 0:
+            emphasis_hierarchy.append("supporting_points")
+        if slide.analytics_needed or slide.diagrams_needed:
+            emphasis_hierarchy.append("visual_elements")
+        if slide.narrative:
+            emphasis_hierarchy.append("narrative_context")
+        if not emphasis_hierarchy:
+            emphasis_hierarchy = ["main_message"]
+
+        # Determine relationship_to_previous
+        relationship = None
+        if position == 1:
+            relationship = "opening"
+        elif previous_slide_type:
+            if previous_slide_type == slide_type_classification:
+                relationship = "continuation"
+            elif previous_slide_type == "section_divider":
+                relationship = "new_section"
+            elif slide_type_classification in ["bilateral_comparison", "matrix_2x2"]:
+                relationship = "contrast"
+            elif slide_type_classification in ["styled_table", "metrics_grid"]:
+                relationship = "deep_dive"
+            else:
+                relationship = "progression"
+
+        # Build generation_instructions based on slide type
+        instruction_map = {
+            "title_slide": "Create impactful opening with clear value proposition. Keep concise and memorable.",
+            "section_divider": "Signal clear transition. Prepare audience for new topic. Brief and directive.",
+            "closing_slide": "Strong call-to-action with memorable takeaway. Include next steps.",
+            "bilateral_comparison": "Balance both columns equally. Highlight key differences. Clear labels.",
+            "sequential_3col": "Show clear progression across steps. Connect each phase logically.",
+            "impact_quote": "Center the quote as hero element. Attribute properly. Context if needed.",
+            "metrics_grid": "Emphasize quantitative impact. Use consistent formatting for numbers.",
+            "matrix_2x2": "Ensure 4 quadrants are balanced. Clear axis labels. Distinct positioning.",
+            "grid_3x3": "Distribute content evenly across 9 cells. Maintain visual balance.",
+            "asymmetric_8_4": "Main content should dominate. Sidebar supports but doesn't compete.",
+            "hybrid_1_2x2": "Overview at top sets context. 2x2 below provides details.",
+            "single_column": "Rich, detailed content. Use hierarchy and whitespace effectively.",
+            "styled_table": "Structure data clearly. Headers must be descriptive. Highlight key values."
+        }
+        generation_instructions = instruction_map.get(
+            slide_type_classification,
+            "Generate clear, professional content aligned with slide purpose."
+        )
+
+        # Build pattern_rationale
+        pattern_rationale = (
+            f"Classified as '{slide_type_classification}' based on position={position}/{total_slides}, "
+            f"content structure (key_points={key_points_count}), and semantic analysis. "
+            f"This slide type best supports the {content_type} presentation goal."
+        )
+
+        return ContentGuidance(
+            content_type=content_type,
+            visual_complexity=visual_complexity,
+            content_density=content_density,
+            tone_indicator=tone,
+            data_type=data_type,
+            emphasis_hierarchy=emphasis_hierarchy,
+            relationship_to_previous=relationship,
+            generation_instructions=generation_instructions,
+            pattern_rationale=pattern_rationale
+        )
+
+    async def _generate_slide_title(
+        self,
+        original_title: str,
+        narrative: str,
+        max_chars: int = 50
+    ) -> str:
+        """
+        Generate concise slide title using LLM.
+
+        v3.4-v1.2: Director generates titles with strict character limits.
+
+        Args:
+            original_title: Original title from strawman
+            narrative: Slide narrative for context
+            max_chars: Maximum character limit (default 50)
+
+        Returns:
+            Generated title (enforced to max_chars)
+        """
+        try:
+            # Use Gemini to generate concise title
+            prompt = f"""Create a concise, impactful slide title (max {max_chars} characters).
+
+Original title: {original_title}
+Context: {narrative[:200]}
+
+Requirements:
+- Maximum {max_chars} characters (STRICT)
+- Professional and clear
+- No special characters or emojis
+- Captures key message
+- Title case formatting
+
+Return ONLY the title text, nothing else."""
+
+            # Use the strawman model for title generation
+            from pydantic_ai import Agent
+            from pydantic import BaseModel
+
+            class TitleResponse(BaseModel):
+                title: str
+
+            title_agent = Agent(
+                model=self.title_generation_model,
+                result_type=TitleResponse,
+                system_prompt="You are a concise title generator for professional presentations."
+            )
+
+            result = await title_agent.run(prompt)
+            generated_title = result.output.title
+
+            # Enforce character limit with truncation fallback
+            if len(generated_title) > max_chars:
+                logger.warning(f"Generated title exceeds {max_chars} chars, truncating")
+                generated_title = generated_title[:max_chars-3] + "..."
+
+            logger.debug(f"Generated title ({len(generated_title)} chars): {generated_title}")
+            return generated_title
+
+        except Exception as e:
+            logger.error(f"Title generation failed: {e}, using original title")
+            # Fallback: truncate original title
+            if len(original_title) > max_chars:
+                return original_title[:max_chars-3] + "..."
+            return original_title
+
+    async def _generate_slide_subtitle(
+        self,
+        narrative: str,
+        key_message: str = None,
+        max_chars: int = 90
+    ) -> str:
+        """
+        Generate concise slide subtitle using LLM.
+
+        v3.4-v1.2: Director generates subtitles with strict character limits.
+
+        Args:
+            narrative: Slide narrative
+            key_message: Optional key message for context
+            max_chars: Maximum character limit (default 90)
+
+        Returns:
+            Generated subtitle (enforced to max_chars)
+        """
+        try:
+            # Use Gemini to generate concise subtitle
+            key_context = f"\nKey message: {key_message}" if key_message else ""
+            prompt = f"""Create a concise subtitle that supports the slide (max {max_chars} characters).
+
+Narrative: {narrative[:300]}{key_context}
+
+Requirements:
+- Maximum {max_chars} characters (STRICT)
+- Complements the main title
+- Professional and clear
+- No special characters or emojis
+- Adds context or value proposition
+
+Return ONLY the subtitle text, nothing else."""
+
+            # Use the strawman model for subtitle generation
+            from pydantic_ai import Agent
+            from pydantic import BaseModel
+
+            class SubtitleResponse(BaseModel):
+                subtitle: str
+
+            subtitle_agent = Agent(
+                model=self.title_generation_model,
+                result_type=SubtitleResponse,
+                system_prompt="You are a concise subtitle generator for professional presentations."
+            )
+
+            result = await subtitle_agent.run(prompt)
+            generated_subtitle = result.output.subtitle
+
+            # Enforce character limit with truncation fallback
+            if len(generated_subtitle) > max_chars:
+                logger.warning(f"Generated subtitle exceeds {max_chars} chars, truncating")
+                generated_subtitle = generated_subtitle[:max_chars-3] + "..."
+
+            logger.debug(f"Generated subtitle ({len(generated_subtitle)} chars): {generated_subtitle}")
+            return generated_subtitle
+
+        except Exception as e:
+            logger.error(f"Subtitle generation failed: {e}, using narrative excerpt")
+            # Fallback: use first sentence of narrative
+            fallback = narrative.split('.')[0] if narrative else ""
+            if len(fallback) > max_chars:
+                return fallback[:max_chars-3] + "..."
+            return fallback
+
+    async def _generate_footer_text(
+        self,
+        presentation_title: str,
+        max_chars: int = 20
+    ) -> str:
+        """
+        Generate concise footer text using LLM.
+
+        v3.4-v1.2: Director generates footer with strict character limits.
+
+        Args:
+            presentation_title: Presentation title for context
+            max_chars: Maximum character limit (default 20)
+
+        Returns:
+            Generated footer text (enforced to max_chars)
+        """
+        try:
+            # Use Gemini to generate concise footer
+            prompt = f"""Create a very concise footer text for presentation (max {max_chars} characters).
+
+Presentation: {presentation_title}
+
+Requirements:
+- Maximum {max_chars} characters (STRICT)
+- Short company name, project name, or theme
+- Professional
+- No special characters
+- Often just 2-4 words
+
+Examples: "Q4 Strategy", "Sales Deck", "Product Launch"
+
+Return ONLY the footer text, nothing else."""
+
+            # Use the strawman model for footer generation
+            from pydantic_ai import Agent
+            from pydantic import BaseModel
+
+            class FooterResponse(BaseModel):
+                footer: str
+
+            footer_agent = Agent(
+                model=self.title_generation_model,
+                result_type=FooterResponse,
+                system_prompt="You are a concise footer text generator for professional presentations."
+            )
+
+            result = await footer_agent.run(prompt)
+            generated_footer = result.output.footer
+
+            # Enforce character limit with truncation fallback
+            if len(generated_footer) > max_chars:
+                logger.warning(f"Generated footer exceeds {max_chars} chars, truncating")
+                generated_footer = generated_footer[:max_chars-3] + "..."
+
+            logger.debug(f"Generated footer ({len(generated_footer)} chars): {generated_footer}")
+            return generated_footer
+
+        except Exception as e:
+            logger.error(f"Footer generation failed: {e}, using abbreviated title")
+            # Fallback: use abbreviated presentation title
+            words = presentation_title.split()
+            if len(words) > 2:
+                fallback = f"{words[0]} {words[1]}"
+            else:
+                fallback = presentation_title
+
+            if len(fallback) > max_chars:
+                return fallback[:max_chars-3] + "..."
+            return fallback
+
+    def _merge_refined_strawman(
+        self,
+        original: PresentationStrawman,
+        refined: PresentationStrawman,
+        user_refinement_request: str
+    ) -> PresentationStrawman:
+        """
+        Merge refined strawman with original, preserving v1.2 fields.
+
+        v3.4-v1.2: Critical fix for REFINE_STRAWMAN stage to preserve:
+        - variant_id (random selection from catalog)
+        - slide_type_classification (13-type taxonomy)
+        - generated_title (LLM-generated, 50 char limit)
+        - generated_subtitle (LLM-generated, 90 char limit)
+        - footer_text (LLM-generated, 20 char limit)
+        - layout_id (L25 or L29)
+        - content_guidance (generation metadata)
+
+        Strategy:
+        1. Keep all v1.2 fields from original slides
+        2. Update content fields (narrative, key_points) from refined
+        3. Preserve presentation-level footer_text
+
+        Args:
+            original: Original strawman with v1.2 fields
+            refined: Refined strawman from LLM
+            user_refinement_request: User's refinement request (unused but available)
+
+        Returns:
+            Merged strawman with v1.2 fields preserved
+        """
+        logger.info("Merging refined strawman with original (preserving v1.2 fields)")
+
+        # Start with original strawman (deep copy)
+        merged = original.model_copy(deep=True)
+
+        # Update presentation-level fields from refined
+        merged.main_title = refined.main_title
+        merged.target_audience = refined.target_audience
+        merged.overall_theme = refined.overall_theme
+        merged.presentation_duration = refined.presentation_duration
+        # PRESERVE footer_text from original (v1.2 field)
+
+        # Slide count must match
+        if len(original.slides) != len(refined.slides):
+            logger.warning(
+                f"Slide count mismatch: original={len(original.slides)}, "
+                f"refined={len(refined.slides)}. Keeping original slide count."
+            )
+            # Return original if slide counts don't match
+            return merged
+
+        # Merge each slide
+        for i, (orig_slide, ref_slide) in enumerate(zip(original.slides, refined.slides)):
+            # PRESERVE v1.2 fields from original
+            merged.slides[i].variant_id = orig_slide.variant_id
+            merged.slides[i].slide_type_classification = orig_slide.slide_type_classification
+            merged.slides[i].generated_title = orig_slide.generated_title
+            merged.slides[i].generated_subtitle = orig_slide.generated_subtitle
+            merged.slides[i].layout_id = orig_slide.layout_id
+            merged.slides[i].layout_selection_reasoning = orig_slide.layout_selection_reasoning
+            merged.slides[i].content_guidance = orig_slide.content_guidance
+
+            # UPDATE content fields from refined
+            merged.slides[i].title = ref_slide.title
+            merged.slides[i].narrative = ref_slide.narrative
+            merged.slides[i].key_points = ref_slide.key_points
+            merged.slides[i].analytics_needed = ref_slide.analytics_needed
+            merged.slides[i].visuals_needed = ref_slide.visuals_needed
+            merged.slides[i].diagrams_needed = ref_slide.diagrams_needed
+            merged.slides[i].structure_preference = ref_slide.structure_preference
+
+            logger.debug(f"Merged slide {i+1}: preserved v1.2 fields, updated content")
+
+        logger.info(f"✅ Merged {len(merged.slides)} slides successfully")
+        return merged
+
+    async def _regenerate_v1_2_fields_for_modified_slides(
+        self,
+        merged_strawman: PresentationStrawman,
+        original_strawman: PresentationStrawman
+    ) -> None:
+        """
+        Re-generate v1.2 fields (titles, subtitle) for slides with modified content.
+
+        v3.4-v1.2: Only regenerates titles/subtitles if slide content changed significantly.
+        Keeps variant_id and classification unchanged.
+
+        Args:
+            merged_strawman: Merged strawman (modified in place)
+            original_strawman: Original strawman for comparison
+        """
+        logger.info("Checking for modified slides to regenerate v1.2 titles/subtitles")
+
+        for i, (merged_slide, orig_slide) in enumerate(zip(merged_strawman.slides, original_strawman.slides)):
+            # Check if content changed
+            content_changed = (
+                merged_slide.narrative != orig_slide.narrative or
+                merged_slide.key_points != orig_slide.key_points
+            )
+
+            if content_changed:
+                logger.info(f"Slide {i+1} content changed, regenerating title/subtitle")
+
+                # Regenerate title
+                try:
+                    new_title = await self._generate_slide_title(
+                        original_title=merged_slide.title,
+                        narrative=merged_slide.narrative or "",
+                        max_chars=50
+                    )
+                    merged_slide.generated_title = new_title
+                    logger.debug(f"Regenerated title for slide {i+1}: '{new_title}'")
+                except Exception as e:
+                    logger.error(f"Title regeneration failed for slide {i+1}: {e}")
+                    # Keep original title if regeneration fails
+
+                # Regenerate subtitle
+                try:
+                    key_message = merged_slide.key_points[0] if merged_slide.key_points else None
+                    new_subtitle = await self._generate_slide_subtitle(
+                        narrative=merged_slide.narrative or "",
+                        key_message=key_message,
+                        max_chars=90
+                    )
+                    merged_slide.generated_subtitle = new_subtitle
+                    logger.debug(f"Regenerated subtitle for slide {i+1}: '{new_subtitle}'")
+                except Exception as e:
+                    logger.error(f"Subtitle regeneration failed for slide {i+1}: {e}")
+                    # Keep original subtitle if regeneration fails
+            else:
+                logger.debug(f"Slide {i+1} unchanged, keeping original v1.2 fields")
+
     async def _select_layout_by_use_case(
         self,
         slide: Slide,
@@ -543,10 +1268,14 @@ class DirectorAgent:
         total_slides: int
     ) -> LayoutSelection:
         """
-        AI-powered layout selection using semantic matching.
+        Simplified layout selection for v7.5-main (2 layouts only).
 
-        v3.2: Replaces rule-based LayoutMapper with AI semantic analysis of
-        slide content against all 24 layout BestUseCases.
+        v3.4: Simplified from 24 layouts to 2 layouts (L25 and L29).
+        No AI semantic matching needed - simple decision tree.
+
+        Layouts:
+        - L29 (Full-Bleed Hero): Opening, closing, section dividers
+        - L25 (Main Content Shell): All content slides
 
         Args:
             slide: Slide object with narrative, key_points, etc.
@@ -556,94 +1285,141 @@ class DirectorAgent:
         Returns:
             LayoutSelection with layout_id and reasoning
         """
-        # Handle mandatory layout positions
+        # Hero slides (L29) - maximum visual impact
         if position == "first":
             return LayoutSelection(
-                layout_id="L01",
-                reasoning="First slide - using title layout",
+                layout_id="L29",
+                reasoning="Opening hero slide - full-bleed impact",
                 confidence=1.0
             )
 
         if position == "last":
             return LayoutSelection(
-                layout_id="L03",
-                reasoning="Last slide - using closing layout",
+                layout_id="L29",
+                reasoning="Closing hero slide - memorable finish",
                 confidence=1.0
             )
 
         if slide.slide_type == "section_divider":
-            return LayoutSelection(
-                layout_id="L02",
-                reasoning="Section divider slide",
-                confidence=1.0
+            # Smart detection: Check if this is actually an agenda/outline slide
+            # Agenda slides typically appear early (position 2) and have specific keywords
+            agenda_keywords = ["agenda", "outline", "overview", "roadmap", "contents", "table of contents"]
+            is_likely_agenda = (
+                position == "middle" and
+                slide.slide_number == 2 and
+                any(keyword in slide.title.lower() for keyword in agenda_keywords)
             )
 
-        # Get all available layouts with BestUseCases (excluding special layouts)
-        layout_options_text = self.layout_schema_manager.format_layout_options_for_ai(
-            exclude_layout_ids=["L01", "L02", "L03"]
+            if is_likely_agenda:
+                return LayoutSelection(
+                    layout_id="L25",
+                    reasoning="Agenda/outline slide - needs content layout for structured list",
+                    confidence=0.9
+                )
+            else:
+                return LayoutSelection(
+                    layout_id="L29",
+                    reasoning="Section divider - dramatic transition",
+                    confidence=1.0
+                )
+
+        # All content slides use L25
+        # L25 handles all content types: text, bullets, analytics, tables, diagrams
+        return LayoutSelection(
+            layout_id="L25",
+            reasoning="Standard content slide - flexible rich content area",
+            confidence=1.0
         )
 
-        # Build AI prompt for semantic matching
-        prompt = f"""
-You are selecting the most appropriate slide layout for a presentation slide.
+    def _classify_l29_slide_purpose(
+        self,
+        slide: Slide,
+        position: str,
+        slide_number: int
+    ) -> str:
+        """
+        Classify the purpose of an L29 hero slide for content generation guidance.
 
-**Slide Information:**
-- Title: {slide.title}
-- Narrative: {slide.narrative}
-- Key Points: {', '.join(slide.key_points[:5]) if slide.key_points else 'None'}
-- Slide Type: {slide.slide_type}
-- Content Needs:
-  - Analytics: {slide.analytics_needed or 'None'}
-  - Visuals: {slide.visuals_needed or 'None'}
-  - Diagrams: {slide.diagrams_needed or 'None'}
-  - Tables: {slide.tables_needed or 'None'}
-- Structure Preference: {slide.structure_preference or 'None'}
+        Categories (with different word limits):
+        - title_slide: Opening slide with presentation title (~75 words)
+        - section_divider: Transition between major sections (~75 words)
+        - closing_slide: Final CTA or thank you slide (~100 words)
+        - regular_hero: Content-rich hero slide (~150 words)
 
-**Available Layouts (with BestUseCase guidance):**
-{layout_options_text}
+        Args:
+            slide: Slide object
+            position: Slide position ("first", "last", "middle")
+            slide_number: 1-indexed slide number
 
-**Task:**
-Select the layout whose BestUseCase most closely matches this slide's purpose and content.
+        Returns:
+            Purpose classification string
+        """
+        # Opening slide = title_slide
+        if position == "first" and slide_number == 1:
+            return "title_slide"
 
-Consider:
-1. Semantic alignment between slide narrative and layout BestUseCase
-2. Content type requirements (text, data, visuals, quotes, comparisons)
-3. Presentation intent (inform, persuade, compare, emphasize, inspire)
-4. Audience comprehension (clarity vs. detail vs. impact)
-5. Specific keywords that match layout BestUseCase
+        # Closing slide = closing_slide
+        if position == "last":
+            return "closing_slide"
 
-**Important Selection Criteria:**
-- If the slide contains a **customer testimonial or quote**, select **L07** (Quote Slide)
-- If the slide is **comparing two options** or showing **pros/cons**, select **L20** (Comparison)
-- If the slide shows **KPIs or metrics dashboard**, select **L19** (Dashboard)
-- If the slide has **data visualization with insights**, select **L17** (Chart + Insights)
-- If the slide has **sequential steps or process**, select **L06** (Numbered List)
-- If the slide has **simple bullet points**, select **L05** (Bullet List)
-- If the slide has **long-form explanation**, select **L04** (Text + Summary)
+        # Section dividers
+        if slide.slide_type == "section_divider":
+            return "section_divider"
 
-Return your selection with clear reasoning based on the semantic match between content and BestUseCase.
-"""
+        # Everything else is a regular hero with full creative freedom
+        return "regular_hero"
 
-        # Run AI selection
-        try:
-            result = await self.strawman_agent.run(
-                prompt,
-                result_type=LayoutSelection,
-                model_settings=ModelSettings(temperature=0.2, max_tokens=500)
-            )
-            selection = result.output
+    def _suggest_visual_pattern(
+        self,
+        slide: Slide,
+        layout_id: str
+    ) -> str:
+        """
+        Suggest visual design pattern based on slide content type.
 
-            logger.info(f"AI selected layout {selection.layout_id} for slide '{slide.title}': {selection.reasoning}")
-            return selection
+        For L25 slides, analyzes key_points to suggest appropriate pattern:
+        - 3-card-metrics-grid: When key_points contain numbers/metrics
+        - styled-table: When key_points suggest comparison/data
+        - 2-column-split-lists: When key_points suggest two categories
+        - standard-content: Default rich content
 
-        except Exception as e:
-            # Fallback to L05 if AI selection fails
-            logger.warning(f"AI layout selection failed: {str(e)}, falling back to L05")
-            return LayoutSelection(
-                layout_id="L05",
-                reasoning=f"Fallback layout after AI selection error: {str(e)[:100]}",
-                confidence=0.5
-            )
+        For L29 slides, suggests hero pattern based on purpose.
+
+        Args:
+            slide: Slide object with key_points
+            layout_id: Layout being used (L25 or L29)
+
+        Returns:
+            Suggested pattern name
+        """
+        if layout_id == "L29":
+            # L29 patterns handled by slide_purpose classification
+            return "hero-gradient"
+
+        # L25 pattern detection
+        key_points = slide.key_points or []
+        key_points_text = " ".join(key_points).lower()
+
+        # Check for metrics (numbers, percentages, dollar amounts)
+        has_metrics = any(char.isdigit() or char == '%' or char == '$' for char in key_points_text)
+
+        # Check for comparison keywords
+        comparison_keywords = ["vs", "versus", "compared", "before", "after", "current", "with", "without"]
+        has_comparison = any(keyword in key_points_text for keyword in comparison_keywords)
+
+        # Check for timeline/phases
+        timeline_keywords = ["phase", "step", "stage", "quarter", "q1", "q2", "q3", "q4", "month", "week"]
+        has_timeline = any(keyword in key_points_text for keyword in timeline_keywords)
+
+        # Pattern selection logic
+        if len(key_points) >= 3 and has_metrics:
+            return "3-card-metrics-grid"
+        elif has_comparison:
+            return "styled-table"
+        elif has_timeline or len(key_points) >= 4:
+            return "2-column-split-lists"
+        else:
+            return "standard-content"
 
     # DEPRECATED v3.1 method - removed in v3.2
     # Replaced by _build_constraints_from_schema() which uses LayoutSchemaManager
@@ -660,6 +1436,7 @@ Return your selection with clear reasoning based on the semantic match between c
 
         v3.2: Uses schema-driven architecture with layout_schema_manager.
         Sends complete layout schema to Text Service for structured generation.
+        v3.3: Adds slide_purpose classification and visual pattern guidance.
 
         Args:
             slide: The slide to generate text for (with layout_id assigned)
@@ -682,6 +1459,25 @@ Return your selection with clear reasoning based on the semantic match between c
             logger.warning(f"Slide {slide_number} has no layout_id, falling back to L05")
             layout_id = "L05"
 
+        # v3.3: Determine slide position for purpose classification
+        total_slides = len(presentation.slides)
+        if slide_number == 1:
+            position = "first"
+        elif slide_number == total_slides:
+            position = "last"
+        else:
+            position = "middle"
+
+        # v3.3: Classify L29 slide purpose for targeted content generation
+        slide_purpose = None
+        if layout_id == "L29":
+            slide_purpose = self._classify_l29_slide_purpose(slide, position, slide_number)
+            logger.debug(f"Slide {slide_number} L29 purpose: {slide_purpose}")
+
+        # v3.3: Suggest visual pattern based on content
+        suggested_pattern = self._suggest_visual_pattern(slide, layout_id)
+        logger.debug(f"Slide {slide_number} suggested pattern: {suggested_pattern}")
+
         # v3.2: Build schema-driven request using LayoutSchemaManager
         presentation_context = {
             "main_title": presentation.main_title,
@@ -696,9 +1492,11 @@ Return your selection with clear reasoning based on the semantic match between c
             presentation_context=presentation_context
         )
 
-        # Add session tracking
+        # Add session tracking and v3.3 enhancements
         schema_request["presentation_id"] = session_id
         schema_request["slide_number"] = slide_number
+        schema_request["slide_purpose"] = slide_purpose  # v3.3: L29 purpose classification
+        schema_request["suggested_pattern"] = suggested_pattern  # v3.3: Visual pattern guidance
 
         logger.info(
             f"Generating content for slide {slide_number} using layout {layout_id} ({schema_request['layout_name']})"
@@ -720,6 +1518,7 @@ Return your selection with clear reasoning based on the semantic match between c
         Convert v3.2 schema request to v1.0 Text Service format.
 
         Temporary compatibility layer until Text Service v1.1 is deployed.
+        v3.3: Adds slide_purpose and suggested_pattern to constraints.
 
         Args:
             schema_request: Schema-driven request from LayoutSchemaManager
@@ -730,8 +1529,16 @@ Return your selection with clear reasoning based on the semantic match between c
         guidance = schema_request['content_guidance']
         layout_schema = schema_request['layout_schema']
 
-        # Build v1.0 compatible constraints from schema
-        constraints = self._build_constraints_from_schema(layout_schema)
+        # v3.3: Extract slide_purpose and suggested_pattern
+        slide_purpose = schema_request.get("slide_purpose")
+        suggested_pattern = schema_request.get("suggested_pattern")
+
+        # Build v1.0 compatible constraints from schema (v3.3: includes slide_purpose)
+        constraints = self._build_constraints_from_schema(
+            layout_schema,
+            slide_purpose=slide_purpose,
+            suggested_pattern=suggested_pattern
+        )
 
         return {
             "presentation_id": schema_request.get("presentation_id", "default"),
@@ -744,38 +1551,84 @@ Return your selection with clear reasoning based on the semantic match between c
                 "slide_context": guidance.get("narrative", ""),
                 "previous_slides": []
             },
-            "constraints": constraints
+            "constraints": constraints,
+            # v3.3: Explicit layout metadata fields for prompt conditionals
+            "layout_id": schema_request.get("layout_id"),  # L25 or L29
+            "slide_purpose": slide_purpose,  # title_slide, section_divider, closing_slide, regular_hero (L29 only)
+            "suggested_pattern": suggested_pattern  # 3-card-metrics-grid, styled-table, etc.
         }
 
-    def _build_constraints_from_schema(self, layout_schema: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_constraints_from_schema(
+        self,
+        layout_schema: Dict[str, Any],
+        slide_purpose: str = None,
+        suggested_pattern: str = None
+    ) -> Dict[str, Any]:
         """
-        Build v1.0 constraints from v3.2 layout schema.
+        Build v1.0 constraints from v3.2 layout schema with smart content area sizing.
 
-        Temporary helper until Text Service v1.1 supports structured generation.
+        Uses layout-specific character limits based on content area dimensions:
+        - L25 rich_content (1800×720px): 1250 chars (~250 words)
+        - L29 hero_content (1920×1080px): Variable based on slide_purpose
+          - title_slide: 375 chars (~75 words) - simple, elegant
+          - section_divider: 375 chars (~75 words) - clean transitions
+          - closing_slide: 500 chars (~100 words) - CTA with details
+          - regular_hero: 750 chars (~150 words) - rich content
+
+        Only counts text_service-owned fields, ignoring layout_builder-owned fields
+        (slide_title, subtitle, footer) to prevent underestimating content needs.
 
         Args:
             layout_schema: Schema from layout_schemas.json
+            slide_purpose: L29 slide purpose classification (v3.3)
+            suggested_pattern: Suggested visual pattern (v3.3)
 
         Returns:
             v1.0 compatible constraints dictionary
         """
-        # Calculate total max characters from all text fields
+        # Calculate total max characters from text_service-owned fields only
         total_chars = 0
         has_bullets = False
         has_numbered = False
 
         for field_name, field_spec in layout_schema.items():
-            if field_spec.get('type') == 'string' and 'max_chars' in field_spec:
-                total_chars += field_spec['max_chars']
+            # Only process text_service-owned fields
+            # Skip layout_builder-owned fields (slide_title, subtitle, footer)
+            if field_spec.get('format_owner') != 'text_service':
+                continue
+
+            if field_spec.get('type') == 'string':
+                if 'max_chars' in field_spec:
+                    # Use explicit max_chars if specified
+                    total_chars += field_spec['max_chars']
+                else:
+                    # Smart defaults based on content area size
+                    # These fields have no max_chars because text_service has creative freedom
+                    if field_name == 'rich_content':
+                        # L25 main content area: 1800×720px = large content area
+                        total_chars += 1250  # ~250 words for rich, engaging content
+                    elif field_name == 'hero_content':
+                        # L29 full-bleed hero: 1920×1080px = full screen impact
+                        # v3.3: Adjust based on slide_purpose
+                        if slide_purpose == 'title_slide':
+                            total_chars += 375  # ~75 words - simple, elegant title
+                        elif slide_purpose == 'section_divider':
+                            total_chars += 375  # ~75 words - clean section transition
+                        elif slide_purpose == 'closing_slide':
+                            total_chars += 500  # ~100 words - CTA with contact info
+                        else:  # regular_hero or None
+                            total_chars += 750  # ~150 words - full creative freedom
+
             elif field_spec.get('type') == 'array':
                 has_bullets = True
                 items = field_spec.get('max_items', 5)
                 chars_per = field_spec.get('max_chars_per_item', 100)
                 total_chars += items * chars_per
+
             elif field_spec.get('type') == 'array_of_objects':
                 has_numbered = True
 
-        # Determine format
+        # Determine format based on content structure
         if has_bullets:
             format_type = "bullet_points"
         elif has_numbered:
@@ -784,7 +1637,7 @@ Return your selection with clear reasoning based on the semantic match between c
             format_type = "paragraph"
 
         return {
-            "max_characters": total_chars or 800,
+            "max_characters": total_chars or 800,  # Fallback to 800 if no fields found
             "tone": "professional",
             "format": format_type
         }
