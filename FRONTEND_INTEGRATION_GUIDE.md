@@ -227,13 +227,33 @@ if (message.type === "action_request") {
 
 **Use Cases:**
 - Confirmation plan acceptance (Stage 3)
-- Strawman acceptance (Stage 4)
+- **Strawman acceptance (Stage 4)** - Critical for progression to Stage 6
 - Refinement decisions (Stage 5)
 
 **Action Values:**
-- `"accept"`: User approves and wants to proceed
-- `"revise"`: User wants changes
-- `"refine"`: User wants to make improvements (Stage 5)
+- `"accept_plan"`: Accept confirmation plan (Stage 3 → Stage 4)
+- `"reject_plan"`: Reject plan and request changes (Stage 3 loop)
+- `"accept_strawman"`: Accept strawman and proceed to Stage 6 (CRITICAL)
+- `"request_refinement"`: Request strawman changes (Stage 4 → Stage 5)
+
+**⚠️ IMPORTANT**: After receiving a strawman, Director sends action buttons. The frontend MUST render these buttons and send the button's `value` field (not `label`) when clicked.
+
+**Example**: When user clicks "Looks perfect!" button:
+```javascript
+// ✅ CORRECT - Send the value field
+ws.send(JSON.stringify({
+  type: "user_message",
+  data: { text: "accept_strawman" }  // Button's value, not label
+}));
+
+// ❌ WRONG - Don't send the label
+ws.send(JSON.stringify({
+  type: "user_message",
+  data: { text: "Looks perfect!" }  // This won't work!
+}));
+```
+
+**📚 See Also**: For detailed action button implementation guide, see **FRONTEND_ACTION_BUTTONS_GUIDE.md**
 
 ---
 
@@ -1216,7 +1236,40 @@ Solutions:
 - Check network/firewall settings
 ```
 
-**Issue 2: No presentation URL received**
+**Issue 2: Stuck after strawman, Stage 6 doesn't start**
+```
+Symptoms:
+- Strawman displays but no action buttons appear
+- User types "looks good" but nothing happens
+- Workflow stuck at Stage 4, doesn't proceed to Stage 6
+
+Root Cause:
+Frontend not handling action_request messages properly
+
+Solutions:
+1. Verify you're handling action_request messages:
+   if (message.type === "action_request") {
+     handleActionRequest(message.payload);
+   }
+
+2. Render action buttons in your UI:
+   - "Looks perfect!" button with value "accept_strawman"
+   - "Make some changes" button with value "request_refinement"
+
+3. When button clicked, send the VALUE (not label):
+   ws.send(JSON.stringify({
+     type: "user_message",
+     data: { text: "accept_strawman" }  // Send this exact value
+   }));
+
+4. Check backend logs for intent classification:
+   - Should see: "Classified intent: Accept_Strawman"
+   - Should see: "State transition: GENERATE_STRAWMAN -> CONTENT_GENERATION"
+
+📚 See FRONTEND_ACTION_BUTTONS_GUIDE.md for complete implementation details
+```
+
+**Issue 3: No presentation URL received**
 ```
 Symptoms: Content generation progress stops, no final URL
 Solutions:
@@ -1227,7 +1280,7 @@ Solutions:
 - Check Text Service v1.2 is responding
 ```
 
-**Issue 3: Presentation iframe doesn't load**
+**Issue 4: Presentation iframe doesn't load**
 ```
 Symptoms: Blank iframe after receiving URL
 Solutions:
@@ -1238,7 +1291,7 @@ Solutions:
 - Check iframe src attribute is set correctly
 ```
 
-**Issue 4: Messages not displaying in chat**
+**Issue 5: Messages not displaying in chat**
 ```
 Symptoms: WebSocket connected but no messages appear
 Solutions:
