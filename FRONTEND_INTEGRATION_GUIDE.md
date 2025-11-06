@@ -15,9 +15,9 @@ This guide provides complete integration instructions for connecting a frontend 
 
 ### Connection URL
 
-**Production (Railway - Coming Soon)**:
+**Production (Railway)**:
 ```
-wss://director-agent-v34-production.up.railway.app/ws?session_id={SESSION_ID}&user_id={USER_ID}
+wss://directorv33-production.up.railway.app/ws?session_id={SESSION_ID}&user_id={USER_ID}
 ```
 
 **Local Development**:
@@ -33,7 +33,7 @@ ws://localhost:8000/ws?session_id={SESSION_ID}&user_id={USER_ID}
 ```javascript
 const sessionId = crypto.randomUUID();
 const userId = "user-12345"; // or user email
-const wsUrl = `wss://director-agent-v34-production.up.railway.app/ws?session_id=${sessionId}&user_id=${userId}`;
+const wsUrl = `wss://directorv33-production.up.railway.app/ws?session_id=${sessionId}&user_id=${userId}`;
 const ws = new WebSocket(wsUrl);
 ```
 
@@ -87,10 +87,15 @@ All messages follow a consistent JSON structure:
 
 ```json
 {
+  "message_id": "msg_07ca8044",
+  "session_id": "29796dc1-9e65-4eb2-b1f1-b808dd5e10fa",
+  "timestamp": "2025-11-06T05:49:41.651292",
   "type": "message_type",
-  "data": { /* payload specific to message type */ }
+  "payload": { /* payload specific to message type */ }
 }
 ```
+
+**⚠️ CRITICAL**: All message data is in the `payload` field, NOT `data`.
 
 ---
 
@@ -150,8 +155,8 @@ Regular conversational message from Director.
 **Handling:**
 ```javascript
 if (message.type === "chat_message") {
-  const text = message.data.text;
-  const format = message.data.format || "text";
+  const text = message.payload.text;
+  const format = message.payload.format || "text";
 
   // Render in chat interface
   appendToChatInterface({
@@ -200,8 +205,8 @@ Director requests user to choose from predefined actions (buttons).
 **Handling:**
 ```javascript
 if (message.type === "action_request") {
-  const promptText = message.data.prompt_text;
-  const actions = message.data.actions;
+  const promptText = message.payload.prompt_text;
+  const actions = message.payload.actions;
 
   // Display prompt
   appendToChatInterface({
@@ -281,8 +286,8 @@ Director sends presentation structure (strawman).
 **Handling:**
 ```javascript
 if (message.type === "slide_update") {
-  const metadata = message.data.metadata;
-  const slides = message.data.slides;
+  const metadata = message.payload.metadata;
+  const slides = message.payload.slides;
 
   // Option 1: Display as text outline in chat
   const outline = `
@@ -336,10 +341,10 @@ if (message.type === "slide_update") {
 **Handling:**
 ```javascript
 if (message.type === "presentation_url") {
-  const url = message.data.url;
-  const slideCount = message.data.slide_count;
-  const successCount = message.data.successful_slides;
-  const message = message.data.message;
+  const url = message.payload.url;
+  const slideCount = message.payload.slide_count;
+  const successCount = message.payload.successful_slides;
+  const message = message.payload.message;
 
   // 🎯 PRIMARY: Update Presentation Screen
   updatePresentationScreen(url);
@@ -398,7 +403,7 @@ Real-time progress during Stage 6 content generation.
 **Handling:**
 ```javascript
 if (message.type === "progress_update") {
-  const { current_slide, total_slides, percentage, message } = message.data;
+  const { current_slide, total_slides, percentage, message } = message.payload;
 
   // Option 1: Update progress bar
   updateProgressBar(percentage);
@@ -441,9 +446,9 @@ Error occurred during processing.
 **Handling:**
 ```javascript
 if (message.type === "error") {
-  const errorMsg = message.data.error;
-  const details = message.data.details;
-  const recoverable = message.data.recoverable;
+  const errorMsg = message.payload.error;
+  const details = message.payload.details;
+  const recoverable = message.payload.recoverable;
 
   appendToChatInterface({
     sender: "system",
@@ -649,22 +654,22 @@ function handleMessage(event) {
 
   switch (message.type) {
     case 'chat_message':
-      handleChatMessage(message.data);
+      handleChatMessage(message.payload);
       break;
     case 'action_request':
-      handleActionRequest(message.data);
+      handleActionRequest(message.payload);
       break;
     case 'slide_update':
-      handleSlideUpdate(message.data);
+      handleSlideUpdate(message.payload);
       break;
     case 'presentation_url':
-      handlePresentationUrl(message.data);
+      handlePresentationUrl(message.payload);
       break;
     case 'progress_update':
-      handleProgressUpdate(message.data);
+      handleProgressUpdate(message.payload);
       break;
     case 'error':
-      handleErrorMessage(message.data);
+      handleErrorMessage(message.payload);
       break;
     default:
       console.warn('Unknown message type:', message.type);
@@ -946,17 +951,19 @@ window.addEventListener('DOMContentLoaded', connect);
 
 ---
 
-## Layout URLs (Production)
+## Service URLs (Production)
 
-**Director Agent**: `wss://director-agent-v34-production.up.railway.app/ws`
+**Director Agent**: `wss://directorv33-production.up.railway.app/ws`
+- WebSocket connection endpoint
+- Frontend connects here for chat and presentation generation
 
 **Text Service v1.2**: `https://web-production-5daf.up.railway.app`
-- Used internally by Director
+- Used internally by Director for content generation
 - Frontend doesn't call this directly
 
-**Layout Architect**: `https://layout-architect-production.up.railway.app`
+**Layout Architect**: `http://localhost:8504` (or production URL when deployed)
 - Generates presentation URLs
-- Frontend receives URLs like: `https://layout-architect-production.up.railway.app/p/{presentation-id}`
+- Frontend receives URLs like: `http://localhost:8504/p/{presentation-id}`
 
 ---
 
@@ -1320,14 +1327,14 @@ ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
 
   if (message.type === 'chat_message') {
-    console.log('Assistant:', message.data.text);
+    console.log('Assistant:', message.payload.text);
     // Display in chat interface
   }
 
   if (message.type === 'presentation_url') {
-    console.log('🎯 Presentation ready:', message.data.url);
+    console.log('🎯 Presentation ready:', message.payload.url);
     // Load URL in presentation iframe
-    document.getElementById('presentation-iframe').src = message.data.url;
+    document.getElementById('presentation-iframe').src = message.payload.url;
   }
 };
 
