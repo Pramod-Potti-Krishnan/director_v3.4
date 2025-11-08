@@ -30,6 +30,8 @@ from src.utils.content_transformer import ContentTransformer
 from src.utils.deck_builder_client import DeckBuilderClient
 # v3.3: GCP Authentication utility for ADC
 from src.utils.gcp_auth import initialize_vertex_ai, get_project_info
+# v3.4: Vertex AI retry logic for 429 errors
+from src.utils.vertex_retry import call_with_retry
 
 logger = setup_logger(__name__)
 
@@ -359,11 +361,19 @@ class DirectorAgent:
                     else:
                         position = "middle"
 
-                    # AI-powered semantic layout selection
-                    layout_selection = await self._select_layout_by_use_case(
-                        slide=slide,
-                        position=position,
-                        total_slides=total_slides
+                    # AI-powered semantic layout selection with retry logic
+                    from config.settings import get_settings
+                    settings = get_settings()
+
+                    layout_selection = await call_with_retry(
+                        lambda: self._select_layout_by_use_case(
+                            slide=slide,
+                            position=position,
+                            total_slides=total_slides
+                        ),
+                        max_retries=settings.MAX_VERTEX_RETRIES,
+                        base_delay=settings.VERTEX_RETRY_BASE_DELAY,
+                        operation_name=f"Layout selection for slide {slide.slide_number}"
                     )
 
                     # Assign selected layout and reasoning to slide
@@ -408,12 +418,17 @@ class DirectorAgent:
                         slide.variant_id = fallback
                         logger.info(f"Variant catalog unavailable, using default variant '{fallback}' for slide {slide.slide_number}")
 
-                    # v3.4-v1.2: Generate slide title with LLM (50 char limit)
+                    # v3.4-v1.2: Generate slide title with LLM (50 char limit) + retry logic
                     try:
-                        generated_title = await self._generate_slide_title(
-                            original_title=slide.title,
-                            narrative=slide.narrative or "",
-                            max_chars=50
+                        generated_title = await call_with_retry(
+                            lambda: self._generate_slide_title(
+                                original_title=slide.title,
+                                narrative=slide.narrative or "",
+                                max_chars=50
+                            ),
+                            max_retries=settings.MAX_VERTEX_RETRIES,
+                            base_delay=settings.VERTEX_RETRY_BASE_DELAY,
+                            operation_name=f"Title generation for slide {slide.slide_number}"
                         )
                         slide.generated_title = generated_title
                         logger.debug(f"Generated title for slide {slide.slide_number}: '{generated_title}'")
@@ -421,13 +436,18 @@ class DirectorAgent:
                         logger.error(f"Title generation failed for slide {slide.slide_number}: {e}")
                         slide.generated_title = slide.title[:50]  # Fallback to truncated original
 
-                    # v3.4-v1.2: Generate slide subtitle with LLM (90 char limit)
+                    # v3.4-v1.2: Generate slide subtitle with LLM (90 char limit) + retry logic
                     try:
                         key_message = slide.key_points[0] if slide.key_points else None
-                        generated_subtitle = await self._generate_slide_subtitle(
-                            narrative=slide.narrative or "",
-                            key_message=key_message,
-                            max_chars=90
+                        generated_subtitle = await call_with_retry(
+                            lambda: self._generate_slide_subtitle(
+                                narrative=slide.narrative or "",
+                                key_message=key_message,
+                                max_chars=90
+                            ),
+                            max_retries=settings.MAX_VERTEX_RETRIES,
+                            base_delay=settings.VERTEX_RETRY_BASE_DELAY,
+                            operation_name=f"Subtitle generation for slide {slide.slide_number}"
                         )
                         slide.generated_subtitle = generated_subtitle
                         logger.debug(f"Generated subtitle for slide {slide.slide_number}: '{generated_subtitle}'")
@@ -445,6 +465,14 @@ class DirectorAgent:
 
                     # Track previous slide type for relationship analysis
                     previous_slide_type = slide_type_classification
+
+                    # v3.4: Rate limiting - delay between slides to prevent 429 errors
+                    # Skip delay for the last slide
+                    if idx < total_slides - 1:
+                        import asyncio
+                        delay = settings.RATE_LIMIT_DELAY_SECONDS
+                        logger.debug(f"Rate limiting: waiting {delay}s before processing next slide")
+                        await asyncio.sleep(delay)
 
                 logger.info(f"✅ Assigned layouts, classifications, and content guidance to all {total_slides} slides")
 
@@ -472,18 +500,14 @@ class DirectorAgent:
                         api_response = await self.deck_builder_client.create_presentation(api_payload)
                         presentation_url = self.deck_builder_client.get_full_url(api_response['url'])
 
-                        logger.info(f"✅ Presentation created: {presentation_url}")
+                        logger.info(f"✅ Preview created: {presentation_url}")
 
-                        # v3.1: Return hybrid response with both URL and strawman
-                        # URL for frontend display, strawman for REFINE_STRAWMAN and CONTENT_GENERATION
-                        response = {
-                            "type": "presentation_url",
-                            "url": presentation_url,
-                            "presentation_id": api_response['id'],
-                            "slide_count": len(strawman.slides),
-                            "message": f"Your presentation is ready! View it at: {presentation_url}",
-                            "strawman": strawman  # Include strawman for session storage
-                        }
+                        # v3.4 FIX: Store preview URL in strawman, but return strawman object
+                        # This allows packager to send BOTH preview link AND action buttons
+                        # The preview URL is stored for reference but doesn't change message type
+                        strawman.preview_url = presentation_url
+                        strawman.preview_presentation_id = api_response['id']
+                        response = strawman  # Return PresentationStrawman object, not dict
                     except Exception as e:
                         logger.error(f"Deck-builder API failed: {e}", exc_info=True)
                         logger.warning("Falling back to JSON response")

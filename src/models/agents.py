@@ -236,6 +236,17 @@ class PresentationStrawman(BaseModel):
                     "Used as presentation_name in Layout Builder L25 slides."
     )
 
+    # v3.4: Preview URL from deck-builder (added dynamically)
+    preview_url: Optional[str] = Field(
+        default=None,
+        description="Deck-builder preview URL (v3.4 fix). "
+                    "Stored as attribute but strawman object returned instead of dict."
+    )
+    preview_presentation_id: Optional[str] = Field(
+        default=None,
+        description="Deck-builder presentation ID for preview"
+    )
+
     # Computed properties
     @property
     def total_slides(self) -> int:

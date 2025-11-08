@@ -108,6 +108,12 @@ class Settings(BaseSettings):
     TEXT_SERVICE_VALIDATE_COUNTS: bool = Field(True, env="TEXT_SERVICE_VALIDATE_COUNTS")
     TEXT_SERVICE_PARALLEL_MODE: bool = Field(True, env="TEXT_SERVICE_PARALLEL_MODE")
 
+    # v3.4: Rate Limiting & 429 Error Prevention (Stage 6)
+    # Prevents Vertex AI quota exhaustion by controlling API call frequency
+    RATE_LIMIT_DELAY_SECONDS: int = Field(2, env="RATE_LIMIT_DELAY_SECONDS")  # Delay between slides
+    MAX_VERTEX_RETRIES: int = Field(5, env="MAX_VERTEX_RETRIES")  # Max retry attempts for 429 errors
+    VERTEX_RETRY_BASE_DELAY: int = Field(2, env="VERTEX_RETRY_BASE_DELAY")  # Base delay (exponential backoff)
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

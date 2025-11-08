@@ -193,7 +193,18 @@ class StreamlinedMessagePackager:
             )
         )
 
-        # Message 2: Action request
+        # v3.4 FIX: If preview URL exists, send it as a chat message before action buttons
+        if hasattr(strawman, 'preview_url') and strawman.preview_url:
+            messages.append(
+                create_chat_message(
+                    session_id=session_id,
+                    text=f"📊 **Preview your presentation:** [{strawman.preview_url}]({strawman.preview_url})\n\n"
+                         f"Review the outline above. If you're happy with it, click 'Looks perfect!' to generate rich content for all slides.",
+                    format="markdown"
+                )
+            )
+
+        # Message 2: Action request (ALWAYS send this!)
         messages.append(
             create_action_request(
                 session_id=session_id,
