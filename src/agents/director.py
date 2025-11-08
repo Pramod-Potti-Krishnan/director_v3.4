@@ -290,36 +290,60 @@ class DirectorAgent:
                 f"Total: {user_tokens + system_tokens}"
             )
 
+            # Get settings for retry configuration
+            from config.settings import get_settings
+            settings = get_settings()
+
             # Route to appropriate agent based on state
             if state_context.current_state == "PROVIDE_GREETING":
-                result = await self.greeting_agent.run(
-                    user_prompt,
-                    model_settings=ModelSettings(temperature=0.7, max_tokens=500)
+                result = await call_with_retry(
+                    lambda: self.greeting_agent.run(
+                        user_prompt,
+                        model_settings=ModelSettings(temperature=0.7, max_tokens=500)
+                    ),
+                    max_retries=settings.MAX_VERTEX_RETRIES,
+                    base_delay=settings.VERTEX_RETRY_BASE_DELAY,
+                    operation_name="Stage 1: Greeting Generation"
                 )
                 response = result.output  # Simple string
                 logger.info("Generated greeting")
 
             elif state_context.current_state == "ASK_CLARIFYING_QUESTIONS":
-                result = await self.questions_agent.run(
-                    user_prompt,
-                    model_settings=ModelSettings(temperature=0.5, max_tokens=1000)
+                result = await call_with_retry(
+                    lambda: self.questions_agent.run(
+                        user_prompt,
+                        model_settings=ModelSettings(temperature=0.5, max_tokens=1000)
+                    ),
+                    max_retries=settings.MAX_VERTEX_RETRIES,
+                    base_delay=settings.VERTEX_RETRY_BASE_DELAY,
+                    operation_name="Stage 2: Clarifying Questions Generation"
                 )
                 response = result.output  # ClarifyingQuestions object
                 logger.info(f"Generated {len(response.questions)} clarifying questions")
 
             elif state_context.current_state == "CREATE_CONFIRMATION_PLAN":
-                result = await self.plan_agent.run(
-                    user_prompt,
-                    model_settings=ModelSettings(temperature=0.3, max_tokens=2000)
+                result = await call_with_retry(
+                    lambda: self.plan_agent.run(
+                        user_prompt,
+                        model_settings=ModelSettings(temperature=0.3, max_tokens=2000)
+                    ),
+                    max_retries=settings.MAX_VERTEX_RETRIES,
+                    base_delay=settings.VERTEX_RETRY_BASE_DELAY,
+                    operation_name="Stage 3: Confirmation Plan Generation"
                 )
                 response = result.output  # ConfirmationPlan object
                 logger.info(f"Generated confirmation plan with {response.proposed_slide_count} slides")
 
             elif state_context.current_state == "GENERATE_STRAWMAN":
                 logger.info("Generating strawman presentation")
-                result = await self.strawman_agent.run(
-                    user_prompt,
-                    model_settings=ModelSettings(temperature=0.4, max_tokens=8000)
+                result = await call_with_retry(
+                    lambda: self.strawman_agent.run(
+                        user_prompt,
+                        model_settings=ModelSettings(temperature=0.4, max_tokens=8000)
+                    ),
+                    max_retries=settings.MAX_VERTEX_RETRIES,
+                    base_delay=settings.VERTEX_RETRY_BASE_DELAY,
+                    operation_name="Stage 4: Strawman Generation"
                 )
                 strawman = result.output  # PresentationStrawman object
                 logger.info(f"Generated strawman with {len(strawman.slides)} slides")
@@ -529,9 +553,14 @@ class DirectorAgent:
                 logger.info(f"Retrieved original strawman with {len(original_strawman.slides)} slides")
 
                 # Generate refinements using LLM
-                result = await self.refine_strawman_agent.run(
-                    user_prompt,
-                    model_settings=ModelSettings(temperature=0.4, max_tokens=8000)
+                result = await call_with_retry(
+                    lambda: self.refine_strawman_agent.run(
+                        user_prompt,
+                        model_settings=ModelSettings(temperature=0.4, max_tokens=8000)
+                    ),
+                    max_retries=settings.MAX_VERTEX_RETRIES,
+                    base_delay=settings.VERTEX_RETRY_BASE_DELAY,
+                    operation_name="Stage 5: Strawman Refinement"
                 )
                 refined_strawman = result.output  # PresentationStrawman object
                 logger.info(f"Generated refined strawman with {len(refined_strawman.slides)} slides")
