@@ -613,15 +613,23 @@ class DirectorAgent:
 
             elif state_context.current_state == "CONTENT_GENERATION":
                 # v3.4-v1.2: Stage 6 - Text Service v1.2 with unified endpoint
-                logger.info("Starting Stage 6: Content Generation (Text Service v1.2)")
+                logger.info("="*80)
+                logger.info("🚀 Starting Stage 6: Content Generation (Text Service v1.2)")
+                logger.info("="*80)
 
                 # Get strawman from session
+                logger.info(f"📥 Retrieving strawman from session_data...")
+                logger.debug(f"   Available session_data keys: {list(state_context.session_data.keys())}")
+
                 strawman_data = state_context.session_data.get("presentation_strawman")
                 if not strawman_data:
+                    logger.error("❌ No strawman found in session_data!")
+                    logger.error(f"   Session data: {state_context.session_data}")
                     raise ValueError("No strawman found in session for content generation")
 
+                logger.info(f"✅ Strawman retrieved successfully")
                 strawman = PresentationStrawman(**strawman_data)
-                logger.info(f"Processing {len(strawman.slides)} slides with v1.2 routing")
+                logger.info(f"📊 Processing {len(strawman.slides)} slides with v1.2 routing")
 
                 # Validate slides have classifications
                 unclassified = [s for s in strawman.slides if not s.slide_type_classification]
@@ -639,22 +647,25 @@ class DirectorAgent:
                 from datetime import datetime
 
                 # v3.4-v1.2: Initialize Text Service v1.2 client and router
-                logger.info("Initializing Text Service v1.2 client and router")
+                logger.info("⚙️  Initializing Text Service v1.2 client and router")
 
                 try:
                     from config.settings import get_settings
                     settings = get_settings()
+
+                    logger.info(f"🔗 Text Service URL: {settings.TEXT_SERVICE_URL}")
+                    logger.info(f"⏱️  Text Service Timeout: {settings.TEXT_SERVICE_TIMEOUT}s")
 
                     # Initialize Text Service v1.2 client
                     v1_2_client = TextServiceClientV1_2(
                         base_url=settings.TEXT_SERVICE_URL,
                         timeout=settings.TEXT_SERVICE_TIMEOUT
                     )
-                    logger.info(f"v1.2 Client initialized: {settings.TEXT_SERVICE_URL}")
+                    logger.info(f"✅ v1.2 Client initialized successfully")
 
                     # Create v1.2 router
                     router = ServiceRouterV1_2(v1_2_client)
-                    logger.info("v1.2 Router initialized")
+                    logger.info("✅ v1.2 Router initialized successfully")
 
                     # Route entire presentation through v1.2 unified endpoint
                     start_time = datetime.utcnow()
@@ -753,12 +764,17 @@ class DirectorAgent:
                     )
 
                 except Exception as e:
-                    logger.error(f"Service routing failed: {e}", exc_info=True)
-                    logger.warning("Text Service v1.2 routing unavailable, falling back to strawman")
+                    logger.error("="*80)
+                    logger.error(f"❌ STAGE 6 ERROR: Text Service routing failed")
+                    logger.error(f"   Error type: {type(e).__name__}")
+                    logger.error(f"   Error message: {str(e)}")
+                    logger.error("="*80, exc_info=True)
+                    logger.warning("⚠️  Text Service v1.2 routing unavailable, falling back to strawman")
                     # Fallback: Create minimal enriched presentation or return None
                     enriched_presentation = None
                     successful_slides = 0
                     failed_slides = len(strawman.slides)
+                    logger.warning(f"📋 Fallback mode: {failed_slides} slides will use placeholder content")
 
                 # Send enriched presentation to Layout Architect
                 if self.deck_builder_enabled and enriched_presentation:
@@ -791,10 +807,19 @@ class DirectorAgent:
                         }
                 elif self.deck_builder_enabled and not enriched_presentation:
                     # Text Service routing failed, use v2.0 approach
-                    logger.warning("No enriched content available, using v2.0 approach")
+                    logger.warning("="*80)
+                    logger.warning("⚠️  FALLBACK: No enriched content available, using v2.0 approach")
+                    logger.warning("   This will create a deck with placeholder content (strawman)")
+                    logger.warning("="*80)
+
                     api_payload = self.content_transformer.transform_presentation(strawman)
+                    logger.info(f"📦 Sending {len(api_payload['slides'])} slides to deck-builder")
+
                     api_response = await self.deck_builder_client.create_presentation(api_payload)
                     fallback_url = self.deck_builder_client.get_full_url(api_response['url'])
+
+                    logger.info(f"📋 Fallback deck created: {fallback_url}")
+
                     response = {
                         "type": "presentation_url",
                         "url": fallback_url,

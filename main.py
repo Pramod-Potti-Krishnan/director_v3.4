@@ -161,37 +161,48 @@ async def health_check():
 @app.get("/version")
 async def version_check():
     """Return deployed code version information."""
-    import subprocess
     import datetime
+    import pathlib
 
-    try:
-        # Get Git commit hash
-        git_commit = subprocess.check_output(
-            ['git', 'rev-parse', 'HEAD'],
-            stderr=subprocess.DEVNULL
-        ).decode('utf-8').strip()
+    # Try to read VERSION file (works in Railway where git is not available)
+    version_file = pathlib.Path(__file__).parent / "VERSION"
+    version_info = {}
 
-        # Get short commit hash
-        git_commit_short = git_commit[:7]
-
-        # Get commit message
-        git_message = subprocess.check_output(
-            ['git', 'log', '-1', '--pretty=%B'],
-            stderr=subprocess.DEVNULL
-        ).decode('utf-8').strip()
-    except Exception as e:
-        git_commit = "unknown"
-        git_commit_short = "unknown"
-        git_message = f"Error getting git info: {str(e)}"
+    if version_file.exists():
+        try:
+            with open(version_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        version_info[key.strip()] = value.strip()
+        except Exception as e:
+            version_info = {"error": f"Failed to read VERSION file: {str(e)}"}
+    else:
+        # Fallback: try git (works locally but not in Railway)
+        import subprocess
+        try:
+            git_commit = subprocess.check_output(
+                ['git', 'rev-parse', 'HEAD'],
+                stderr=subprocess.DEVNULL
+            ).decode('utf-8').strip()
+            version_info = {
+                "commit": git_commit[:7],
+                "note": "git-based (VERSION file missing)"
+            }
+        except Exception:
+            version_info = {"error": "No VERSION file and git unavailable"}
 
     return {
         "service": "director-agent-v3.4",
-        "commit": git_commit,
-        "commit_short": git_commit_short,
-        "commit_message": git_message,
+        "version": version_info.get("v3.4-build-20251108-181947", "unknown"),
+        "commit": version_info.get("commit", "unknown"),
+        "features": version_info.get("features", "unknown"),
+        "deployed_status": version_info.get("deployed", "unknown"),
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "environment": settings.APP_ENV,
-        "railway_project": os.environ.get('RAILWAY_PROJECT_ID', 'not_on_railway')
+        "railway_project": os.environ.get('RAILWAY_PROJECT_ID', 'not_on_railway'),
+        "version_file_found": version_file.exists()
     }
 
 # Debug endpoint to check Railway environment variables
