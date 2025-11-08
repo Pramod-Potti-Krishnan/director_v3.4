@@ -217,14 +217,46 @@ class WebSocketHandler:
             logger.info(f"Processing user input in state {session.current_state}")
 
             # STEP 1: Classify user intent
-            intent = await self.intent_router.classify(
-                user_message=user_input,
-                context={
-                    'current_state': session.current_state,
-                    'recent_history': session.conversation_history[-3:] if session.conversation_history else []
-                }
-            )
-            logger.info(f"Classified intent: {intent.intent_type} with confidence {intent.confidence}")
+            # v3.4 FIX: Direct button action mapping to avoid LLM classification failures
+            intent = None
+            if user_input == "accept_strawman" and session.current_state == "GENERATE_STRAWMAN":
+                intent = UserIntent(
+                    intent_type="Accept_Strawman",
+                    confidence=1.0,
+                    extracted_info=None
+                )
+                logger.info("🔘 Directly mapped button action 'accept_strawman' → Accept_Strawman intent")
+            elif user_input == "accept_plan" and session.current_state == "CREATE_CONFIRMATION_PLAN":
+                intent = UserIntent(
+                    intent_type="Accept_Plan",
+                    confidence=1.0,
+                    extracted_info=None
+                )
+                logger.info("🔘 Directly mapped button action 'accept_plan' → Accept_Plan intent")
+            elif user_input == "request_refinement" and session.current_state in ["GENERATE_STRAWMAN", "REFINE_STRAWMAN"]:
+                # For refinement requests, we still need LLM to extract the refinement details
+                # So don't map directly, let LLM classify
+                logger.info("📝 User requested refinement - using LLM classification to extract details")
+                intent = await self.intent_router.classify(
+                    user_message=user_input,
+                    context={
+                        'current_state': session.current_state,
+                        'recent_history': session.conversation_history[-3:] if session.conversation_history else []
+                    }
+                )
+
+            # If not a known button action, use LLM classification
+            if intent is None:
+                intent = await self.intent_router.classify(
+                    user_message=user_input,
+                    context={
+                        'current_state': session.current_state,
+                        'recent_history': session.conversation_history[-3:] if session.conversation_history else []
+                    }
+                )
+                logger.info(f"🤖 LLM classified intent: {intent.intent_type} with confidence {intent.confidence}")
+
+            logger.info(f"Final intent: {intent.intent_type} (confidence: {intent.confidence})")
 
             # STEP 2: Handle intent-based actions
             if intent.intent_type == "Change_Topic":

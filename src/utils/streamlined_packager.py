@@ -194,13 +194,13 @@ class StreamlinedMessagePackager:
         )
 
         # v3.4 FIX: If preview URL exists, send it as a chat message before action buttons
+        # Note: Frontend displays preview_url in viewer pane, not as link in chat
         if hasattr(strawman, 'preview_url') and strawman.preview_url:
             messages.append(
                 create_chat_message(
                     session_id=session_id,
-                    text=f"📊 **Preview your presentation:** [{strawman.preview_url}]({strawman.preview_url})\n\n"
-                         f"Review the outline above. If you're happy with it, click 'Looks perfect!' to generate rich content for all slides.",
-                    format="markdown"
+                    text="Review the structural outline in the preview. If you're happy with the structure, click 'Looks perfect!' to generate rich HTML content for all slides using AI.",
+                    format="plain"
                 )
             )
 
@@ -208,7 +208,7 @@ class StreamlinedMessagePackager:
         messages.append(
             create_action_request(
                 session_id=session_id,
-                prompt_text="Your presentation is ready! What would you like to do?",
+                prompt_text="A base strawman is ready for you to validate. Does the structure look good, or would you like to propose refinements?",
                 actions=[
                     {
                         "label": "Looks perfect!",
@@ -470,7 +470,7 @@ class StreamlinedMessagePackager:
             return create_status_update(
                 session_id=session_id,
                 status=StatusLevel.GENERATING,
-                text="Excellent! I'm now creating your presentation. This will take about 15-20 seconds...",
+                text="I'm working on the strawman to ensure we get the structure right before bringing in the details...",
                 progress=0,
                 estimated_time=20
             )
