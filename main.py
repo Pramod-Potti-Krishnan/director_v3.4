@@ -157,6 +157,43 @@ async def health_check():
         "architecture": "Phase 1 - State-Driven with Intent Routing"
     }
 
+# Version verification endpoint
+@app.get("/version")
+async def version_check():
+    """Return deployed code version information."""
+    import subprocess
+    import datetime
+
+    try:
+        # Get Git commit hash
+        git_commit = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            stderr=subprocess.DEVNULL
+        ).decode('utf-8').strip()
+
+        # Get short commit hash
+        git_commit_short = git_commit[:7]
+
+        # Get commit message
+        git_message = subprocess.check_output(
+            ['git', 'log', '-1', '--pretty=%B'],
+            stderr=subprocess.DEVNULL
+        ).decode('utf-8').strip()
+    except Exception as e:
+        git_commit = "unknown"
+        git_commit_short = "unknown"
+        git_message = f"Error getting git info: {str(e)}"
+
+    return {
+        "service": "director-agent-v3.4",
+        "commit": git_commit,
+        "commit_short": git_commit_short,
+        "commit_message": git_message,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "environment": settings.APP_ENV,
+        "railway_project": os.environ.get('RAILWAY_PROJECT_ID', 'not_on_railway')
+    }
+
 # Debug endpoint to check Railway environment variables
 @app.get("/debug/env")
 async def debug_env():

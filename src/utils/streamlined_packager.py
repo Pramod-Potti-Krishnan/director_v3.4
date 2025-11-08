@@ -187,7 +187,8 @@ class StreamlinedMessagePackager:
                     "overall_theme": strawman.overall_theme,
                     "design_suggestions": strawman.design_suggestions,
                     "target_audience": strawman.target_audience,
-                    "presentation_duration": strawman.presentation_duration
+                    "presentation_duration": strawman.presentation_duration,
+                    "preview_url": strawman.preview_url if hasattr(strawman, 'preview_url') else None
                 },
                 slides=slide_data
             )
@@ -279,7 +280,8 @@ class StreamlinedMessagePackager:
                     "overall_theme": refined_strawman.overall_theme,
                     "design_suggestions": refined_strawman.design_suggestions,
                     "target_audience": refined_strawman.target_audience,
-                    "presentation_duration": refined_strawman.presentation_duration
+                    "presentation_duration": refined_strawman.presentation_duration,
+                    "preview_url": refined_strawman.preview_url if hasattr(refined_strawman, 'preview_url') else None
                 },
                 slides=slide_data,
                 affected_slides=affected_slide_ids
