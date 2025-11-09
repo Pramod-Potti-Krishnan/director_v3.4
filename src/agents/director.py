@@ -518,6 +518,7 @@ class DirectorAgent:
                     try:
                         # v3.4 FIX: Add diagnostic logging for deck-builder call
                         import sys
+                        from datetime import datetime
                         from config.settings import get_settings
                         settings = get_settings()
 
