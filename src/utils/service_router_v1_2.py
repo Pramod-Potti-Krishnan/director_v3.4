@@ -118,9 +118,14 @@ class ServiceRouterV1_2:
         errors = []
 
         for slide in slides:
-            if not slide.variant_id:
+            # Check if this is a hero slide (title, section, closing)
+            is_hero = self._is_hero_slide(slide)
+
+            # v3.4 FIX: Hero slides don't need variant_id (they use hero endpoints)
+            # Only content slides require variant_id for /v1.2/generate endpoint
+            if not is_hero and not slide.variant_id:
                 errors.append(
-                    f"Slide {slide.slide_id} missing variant_id (required for v1.2)"
+                    f"Slide {slide.slide_id} missing variant_id (required for content slides)"
                 )
 
             if not slide.generated_title:
@@ -133,7 +138,7 @@ class ServiceRouterV1_2:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        logger.info("✅ All slides validated for v1.2 (variant_id + generated_title present)")
+        logger.info("✅ All slides validated for v1.2 (generated_title present, variant_id present for content slides)")
 
     async def _route_sequential(
         self,
