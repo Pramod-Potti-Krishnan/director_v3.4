@@ -516,13 +516,34 @@ class DirectorAgent:
                 # v2.0: Transform and send to deck-builder API
                 if self.deck_builder_enabled:
                     try:
+                        # v3.4 FIX: Add diagnostic logging for deck-builder call
+                        import sys
+                        from config.settings import get_settings
+                        settings = get_settings()
+
+                        print("="*80, flush=True)
+                        print("🏗️  STAGE 4: CALLING DECK-BUILDER FOR PREVIEW", flush=True)
+                        print(f"   URL: {settings.DECK_BUILDER_API_URL}", flush=True)
+                        print(f"   Slide count: {len(strawman.slides)}", flush=True)
+                        print(f"   Timestamp: {datetime.utcnow().isoformat()}", flush=True)
+                        print("="*80, flush=True)
+                        sys.stdout.flush()
+
                         logger.info("Transforming presentation for deck-builder")
                         api_payload = self.content_transformer.transform_presentation(strawman)
                         logger.debug(f"Transformed to {len(api_payload['slides'])} deck-builder slides")
 
+                        print(f"✅ Transformation complete: {len(api_payload['slides'])} slides", flush=True)
+                        sys.stdout.flush()
+
                         logger.info("Calling deck-builder API")
                         api_response = await self.deck_builder_client.create_presentation(api_payload)
                         presentation_url = self.deck_builder_client.get_full_url(api_response['url'])
+
+                        print(f"✅ Deck-builder API call successful", flush=True)
+                        print(f"   Presentation ID: {api_response.get('id', 'N/A')}", flush=True)
+                        print(f"   URL: {presentation_url}", flush=True)
+                        sys.stdout.flush()
 
                         logger.info(f"✅ Preview created: {presentation_url}")
 
@@ -545,9 +566,37 @@ class DirectorAgent:
                         sys.stdout.flush()
 
                         response = strawman  # Return PresentationStrawman object, not dict
+
                     except Exception as e:
+                        # v3.4 FIX: Comprehensive error diagnostics for deck-builder failure
+                        error_type = type(e).__name__
+                        error_message = str(e)
+
+                        print("="*80, flush=True)
+                        print("❌ DECK-BUILDER API CALL FAILED (STAGE 4)", flush=True)
+                        print(f"   Error Type: {error_type}", flush=True)
+                        print(f"   Error Message: {error_message}", flush=True)
+                        print(f"   URL: {settings.DECK_BUILDER_API_URL if 'settings' in locals() else 'unknown'}", flush=True)
+
+                        # Check for specific error types
+                        if "timeout" in error_message.lower() or "asyncio" in error_message.lower():
+                            print(f"   ⚠️  TIMEOUT ERROR - Deck-builder not responding", flush=True)
+                        elif "connection" in error_message.lower():
+                            print(f"   ⚠️  CONNECTION ERROR - Cannot reach deck-builder", flush=True)
+                        elif "404" in error_message or "not found" in error_message.lower():
+                            print(f"   ⚠️  NOT FOUND - Deck-builder endpoint missing", flush=True)
+                        else:
+                            print(f"   ⚠️  UNKNOWN ERROR TYPE", flush=True)
+
+                        print(f"   preview_url will be None (no preview available)", flush=True)
+                        print("="*80, flush=True)
+                        sys.stdout.flush()
+
                         logger.error(f"Deck-builder API failed: {e}", exc_info=True)
-                        logger.warning("Falling back to JSON response")
+                        logger.warning("Falling back to JSON response without preview_url")
+
+                        # Store error info in strawman for debugging
+                        strawman._preview_url_error = f"{error_type}: {error_message}"
                         response = strawman
                 else:
                     response = strawman
@@ -626,6 +675,16 @@ class DirectorAgent:
 
             elif state_context.current_state == "CONTENT_GENERATION":
                 # v3.4-v1.2: Stage 6 - Text Service v1.2 with unified endpoint
+
+                # v3.4 FIX: Use print() for Railway visibility (logger may be suppressed)
+                import sys
+                print("="*80, flush=True)
+                print("🚀 ENTERING STAGE 6: CONTENT_GENERATION", flush=True)
+                print(f"   Session ID: {session_id if 'session_id' in locals() else 'N/A'}", flush=True)
+                print(f"   Timestamp: {datetime.utcnow().isoformat()}", flush=True)
+                print("="*80, flush=True)
+                sys.stdout.flush()
+
                 logger.info("="*80)
                 logger.info("🚀 Starting Stage 6: Content Generation (Text Service v1.2)")
                 logger.info("="*80)
@@ -634,15 +693,30 @@ class DirectorAgent:
                 logger.info(f"📥 Retrieving strawman from session_data...")
                 logger.debug(f"   Available session_data keys: {list(state_context.session_data.keys())}")
 
+                # v3.4 FIX: Add diagnostic logging for session data retrieval
+                print(f"💾 SESSION DATA RETRIEVAL", flush=True)
+                print(f"   Available keys: {list(state_context.session_data.keys())}", flush=True)
+                print(f"   Has presentation_strawman: {'presentation_strawman' in state_context.session_data}", flush=True)
+                sys.stdout.flush()
+
                 strawman_data = state_context.session_data.get("presentation_strawman")
                 if not strawman_data:
+                    print(f"❌ ERROR: No strawman found in session_data!", flush=True)
+                    print(f"   Session data keys: {list(state_context.session_data.keys())}", flush=True)
+                    sys.stdout.flush()
                     logger.error("❌ No strawman found in session_data!")
                     logger.error(f"   Session data: {state_context.session_data}")
                     raise ValueError("No strawman found in session for content generation")
 
                 logger.info(f"✅ Strawman retrieved successfully")
+                print(f"✅ Strawman data retrieved from session", flush=True)
+                sys.stdout.flush()
+
                 strawman = PresentationStrawman(**strawman_data)
                 logger.info(f"📊 Processing {len(strawman.slides)} slides with v1.2 routing")
+
+                print(f"📊 Strawman deserialized: {len(strawman.slides)} slides", flush=True)
+                sys.stdout.flush()
 
                 # Validate slides have classifications
                 unclassified = [s for s in strawman.slides if not s.slide_type_classification]
@@ -680,12 +754,27 @@ class DirectorAgent:
                     router = ServiceRouterV1_2(v1_2_client)
                     logger.info("✅ v1.2 Router initialized successfully")
 
+                    # v3.4 FIX: Add diagnostic logging before Text Service call
+                    print("="*80, flush=True)
+                    print("🌐 CALLING TEXT SERVICE v1.2", flush=True)
+                    print(f"   URL: {settings.TEXT_SERVICE_URL}", flush=True)
+                    print(f"   Timeout: {settings.TEXT_SERVICE_TIMEOUT}s", flush=True)
+                    print(f"   Total slides to process: {len(strawman.slides)}", flush=True)
+                    print(f"   Starting at: {datetime.utcnow().isoformat()}", flush=True)
+                    print("="*80, flush=True)
+                    sys.stdout.flush()
+
                     # Route entire presentation through v1.2 unified endpoint
                     start_time = datetime.utcnow()
                     routing_result = await router.route_presentation(
                         strawman=strawman,
                         session_id=session_id
                     )
+
+                    # v3.4 FIX: Log routing completion
+                    print(f"✅ TEXT SERVICE ROUTING COMPLETE", flush=True)
+                    print(f"   Duration: {(datetime.utcnow() - start_time).total_seconds():.2f}s", flush=True)
+                    sys.stdout.flush()
 
                     # Parse routing results
                     generated_content = routing_result.get("generated_slides", [])
@@ -777,12 +866,40 @@ class DirectorAgent:
                     )
 
                 except Exception as e:
+                    # v3.4 FIX: Comprehensive error diagnostics for Text Service failure
+                    error_type = type(e).__name__
+                    error_message = str(e)
+
+                    print("="*80, flush=True)
+                    print("❌ TEXT SERVICE ROUTING FAILED (STAGE 6)", flush=True)
+                    print(f"   Error Type: {error_type}", flush=True)
+                    print(f"   Error Message: {error_message}", flush=True)
+                    print(f"   Text Service URL: {settings.TEXT_SERVICE_URL if 'settings' in locals() else 'unknown'}", flush=True)
+
+                    # Check for specific error types
+                    if "timeout" in error_message.lower() or "asyncio" in error_message.lower():
+                        print(f"   ⚠️  TIMEOUT ERROR - Text Service not responding", flush=True)
+                    elif "connection" in error_message.lower() or "refused" in error_message.lower():
+                        print(f"   ⚠️  CONNECTION ERROR - Cannot reach Text Service", flush=True)
+                    elif "404" in error_message or "not found" in error_message.lower():
+                        print(f"   ⚠️  NOT FOUND - Text Service endpoint missing", flush=True)
+                    elif "401" in error_message or "403" in error_message or "unauthorized" in error_message.lower():
+                        print(f"   ⚠️  AUTH ERROR - Text Service authentication failed", flush=True)
+                    else:
+                        print(f"   ⚠️  UNKNOWN ERROR TYPE", flush=True)
+
+                    print(f"   Falling back to strawman-only presentation (no enriched content)", flush=True)
+                    print(f"   Affected slides: {len(strawman.slides)}", flush=True)
+                    print("="*80, flush=True)
+                    sys.stdout.flush()
+
                     logger.error("="*80)
                     logger.error(f"❌ STAGE 6 ERROR: Text Service routing failed")
                     logger.error(f"   Error type: {type(e).__name__}")
                     logger.error(f"   Error message: {str(e)}")
                     logger.error("="*80, exc_info=True)
                     logger.warning("⚠️  Text Service v1.2 routing unavailable, falling back to strawman")
+
                     # Fallback: Create minimal enriched presentation or return None
                     enriched_presentation = None
                     successful_slides = 0

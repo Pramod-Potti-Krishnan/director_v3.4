@@ -188,6 +188,19 @@ class StreamlinedMessagePackager:
         print(f"   strawman class name: {strawman.__class__.__name__}", flush=True)
         print(f"   hasattr check: {hasattr(strawman, 'preview_url')}", flush=True)
         print(f"   preview_url value: {preview_url_value}", flush=True)
+
+        # v3.4 FIX: Show warning if preview_url is None
+        if not preview_url_value:
+            print(f"   ⚠️  WARNING: preview_url is None!", flush=True)
+            # Check if there's an error message stored
+            if hasattr(strawman, '_preview_url_error'):
+                print(f"   ⚠️  Reason: {strawman._preview_url_error}", flush=True)
+            else:
+                print(f"   ⚠️  Reason: Not set by Stage 4 (deck-builder might have failed)", flush=True)
+            print(f"   ⚠️  Frontend will NOT show preview!", flush=True)
+        else:
+            print(f"   ✅ Preview URL will be sent to frontend", flush=True)
+
         print(f"   strawman.main_title: {strawman.main_title}", flush=True)
         print(f"   Total slides: {len(slide_data)}", flush=True)
         print("="*80, flush=True)
