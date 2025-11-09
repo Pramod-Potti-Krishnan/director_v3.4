@@ -73,8 +73,22 @@ class ServiceRouterV1_2:
 
         logger.info(f"Starting v1.2 presentation routing: {len(slides)} slides")
 
+        # v3.4 DIAGNOSTIC: Print slide validation details
+        import sys
+        print("="*80, flush=True)
+        print("🔍 VALIDATING SLIDES FOR V1.2 ROUTING", flush=True)
+        print(f"   Total slides: {len(slides)}", flush=True)
+        for slide in slides:
+            print(f"   Slide {slide.slide_number}: id={slide.slide_id}, variant_id={getattr(slide, 'variant_id', 'MISSING')}, generated_title={getattr(slide, 'generated_title', 'MISSING')[:30] if hasattr(slide, 'generated_title') else 'MISSING'}...", flush=True)
+        print("="*80, flush=True)
+        sys.stdout.flush()
+
         # Validate all slides have required v1.2 fields
         self._validate_slides(slides)
+
+        # v3.4 DIAGNOSTIC: Validation passed
+        print(f"✅ All {len(slides)} slides validated successfully", flush=True)
+        sys.stdout.flush()
 
         # Process slides sequentially
         result = await self._route_sequential(slides, strawman, session_id)
@@ -148,9 +162,24 @@ class ServiceRouterV1_2:
         for idx, slide in enumerate(slides):
             slide_number = idx + 1
 
+            # v3.4 DIAGNOSTIC: Print slide processing start
+            import sys
+            print("="*80, flush=True)
+            print(f"📝 PROCESSING SLIDE {slide_number}/{len(slides)}", flush=True)
+            print(f"   Slide ID: {slide.slide_id}", flush=True)
+            print(f"   Slide Type: {slide.slide_type_classification}", flush=True)
+            print(f"   Variant ID: {slide.variant_id}", flush=True)
+            print(f"   Generated Title: {slide.generated_title[:50]}...", flush=True)
+            print("="*80, flush=True)
+            sys.stdout.flush()
+
             try:
                 # Check if this is a hero slide
                 is_hero = self._is_hero_slide(slide)
+
+                # v3.4 DIAGNOSTIC: Print hero detection result
+                print(f"   Is Hero Slide: {is_hero} (type: {slide.slide_type_classification})", flush=True)
+                sys.stdout.flush()
 
                 if is_hero:
                     # NEW v3.4: Generate hero slides using hero endpoints
@@ -165,6 +194,12 @@ class ServiceRouterV1_2:
                             slide, strawman
                         )
 
+                        # v3.4 DIAGNOSTIC: Print hero endpoint call details
+                        print(f"   🎬 CALLING HERO ENDPOINT", flush=True)
+                        print(f"      Endpoint: {hero_request_data['endpoint']}", flush=True)
+                        print(f"      Payload keys: {list(hero_request_data['payload'].keys())}", flush=True)
+                        sys.stdout.flush()
+
                         # Call hero endpoint
                         start = datetime.utcnow()
                         hero_response = await self.client.call_hero_endpoint(
@@ -172,6 +207,11 @@ class ServiceRouterV1_2:
                             payload=hero_request_data["payload"]
                         )
                         duration = (datetime.utcnow() - start).total_seconds()
+
+                        # v3.4 DIAGNOSTIC: Print hero response
+                        print(f"   ✅ Hero endpoint returned in {duration:.2f}s", flush=True)
+                        print(f"      Content length: {len(hero_response.get('content', ''))} chars", flush=True)
+                        sys.stdout.flush()
                         total_generation_time += duration
 
                         # Build successful result
@@ -193,6 +233,13 @@ class ServiceRouterV1_2:
                         )
 
                     except Exception as hero_error:
+                        # v3.4 DIAGNOSTIC: Print hero error details
+                        print(f"   ❌ HERO ENDPOINT FAILED", flush=True)
+                        print(f"      Error Type: {type(hero_error).__name__}", flush=True)
+                        print(f"      Error Message: {str(hero_error)}", flush=True)
+                        print(f"      Endpoint: {hero_request_data.get('endpoint', 'unknown')}", flush=True)
+                        sys.stdout.flush()
+
                         logger.error(f"Hero slide generation failed: {hero_error}")
                         failed_slides.append({
                             "slide_number": slide_number,
@@ -218,10 +265,21 @@ class ServiceRouterV1_2:
                     current_index=idx
                 )
 
+                # v3.4 DIAGNOSTIC: Print content slide HTTP call details
+                print(f"   🌐 CALLING TEXT SERVICE /v1.2/generate", flush=True)
+                print(f"      Request keys: {list(request.keys())}", flush=True)
+                print(f"      Variant ID: {request.get('variant_id')}", flush=True)
+                sys.stdout.flush()
+
                 # Call v1.2 generate endpoint
                 start = datetime.utcnow()
                 generated = await self.client.generate(request)
                 duration = (datetime.utcnow() - start).total_seconds()
+
+                # v3.4 DIAGNOSTIC: Print HTTP response
+                print(f"   ✅ Text Service returned in {duration:.2f}s", flush=True)
+                print(f"      Content length: {len(generated.content) if hasattr(generated, 'content') else 'N/A'} chars", flush=True)
+                sys.stdout.flush()
 
                 total_generation_time += duration
 
@@ -239,6 +297,15 @@ class ServiceRouterV1_2:
                 logger.info(f"✅ Slide {slide_number} generated successfully ({duration:.2f}s)")
 
             except Exception as e:
+                # v3.4 DIAGNOSTIC: Print content slide error details
+                print(f"   ❌ CONTENT SLIDE GENERATION FAILED", flush=True)
+                print(f"      Error Type: {type(e).__name__}", flush=True)
+                print(f"      Error Message: {str(e)}", flush=True)
+                print(f"      Variant ID: {slide.variant_id}", flush=True)
+                import traceback
+                print(f"      Traceback: {traceback.format_exc()}", flush=True)
+                sys.stdout.flush()
+
                 logger.error(f"❌ Slide {slide_number} generation failed: {e}")
                 failed_slides.append({
                     "slide_number": slide_number,
