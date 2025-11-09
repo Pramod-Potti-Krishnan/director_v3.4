@@ -1,6 +1,10 @@
 """
 Director Agent - AI Presentation Assistant
 Main entry point for the standalone director agent application.
+
+Deployment: 2025-11-08 19:35 UTC - Force redeploy with diagnostic logging
+Commits: 976a0cb (comprehensive logging), 62a7e05 (VERSION update)
+Features: 📸 📦 📤 🔄 ✅ 💾 emoji markers for log tracing
 """
 
 import asyncio
