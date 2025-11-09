@@ -679,6 +679,7 @@ class DirectorAgent:
 
                 # v3.4 FIX: Use print() for Railway visibility (logger may be suppressed)
                 import sys
+                from datetime import datetime
                 print("="*80, flush=True)
                 print("🚀 ENTERING STAGE 6: CONTENT_GENERATION", flush=True)
                 print(f"   Session ID: {session_id if 'session_id' in locals() else 'N/A'}", flush=True)

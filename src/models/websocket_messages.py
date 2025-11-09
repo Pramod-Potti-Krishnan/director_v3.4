@@ -49,6 +49,7 @@ class SlideMetadata(BaseModel):
     design_suggestions: str = Field(..., description="Design and styling suggestions")
     target_audience: str = Field(..., description="Target audience description")
     presentation_duration: int = Field(..., description="Estimated duration in minutes")
+    preview_url: Optional[str] = Field(None, description="Preview URL from deck-builder (Stage 4)")
 
 
 class SlideData(BaseModel):
