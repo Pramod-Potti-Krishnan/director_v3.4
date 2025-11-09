@@ -531,6 +531,17 @@ class DirectorAgent:
                         # The preview URL is stored for reference but doesn't change message type
                         strawman.preview_url = presentation_url
                         strawman.preview_presentation_id = api_response['id']
+
+                        # v3.4 DIAGNOSTIC: Verify preview URL assignment
+                        logger.info("="*80)
+                        logger.info("📸 STAGE 4 - PREVIEW URL ASSIGNMENT")
+                        logger.info(f"   strawman.preview_url = {presentation_url}")
+                        logger.info(f"   strawman.preview_presentation_id = {api_response['id']}")
+                        logger.info(f"   strawman type: {type(strawman)}")
+                        logger.info(f"   hasattr(strawman, 'preview_url'): {hasattr(strawman, 'preview_url')}")
+                        logger.info(f"   Actual value: {getattr(strawman, 'preview_url', 'ATTRIBUTE_NOT_FOUND')}")
+                        logger.info("="*80)
+
                         response = strawman  # Return PresentationStrawman object, not dict
                     except Exception as e:
                         logger.error(f"Deck-builder API failed: {e}", exc_info=True)
@@ -790,7 +801,19 @@ class DirectorAgent:
                             "skipped_slides": skipped_slides,
                             "message": f"Your presentation with generated content is ready! View it at: {deck_url}"
                         }
-                        logger.info(f"✅ Stage 6 complete: {deck_url}")
+
+                        # v3.4 DIAGNOSTIC: Log Stage 6 completion details
+                        logger.info("="*80)
+                        logger.info("✅ STAGE 6 COMPLETE - RETURNING URL (Content Generated)")
+                        logger.info(f"   Response type: {response.get('type')}")
+                        logger.info(f"   URL returned: {response.get('url')}")
+                        logger.info(f"   Presentation ID: {response.get('presentation_id', 'N/A')}")
+                        logger.info(f"   Content generated: {response.get('content_generated')}")
+                        logger.info(f"   Successful slides: {response.get('successful_slides')}")
+                        logger.info(f"   Failed slides: {response.get('failed_slides')}")
+                        logger.info(f"   Skipped slides: {response.get('skipped_slides')}")
+                        logger.info(f"   Message: {response.get('message')}")
+                        logger.info("="*80)
                     except Exception as e:
                         logger.error(f"Layout Architect integration failed: {e}", exc_info=True)
                         logger.warning("Falling back to v2.0-style deck with placeholders")
@@ -827,6 +850,17 @@ class DirectorAgent:
                         "content_generated": False,
                         "message": f"Presentation created (no text generation): {fallback_url}"
                     }
+
+                    # v3.4 DIAGNOSTIC: Log Stage 6 fallback completion
+                    logger.info("="*80)
+                    logger.info("✅ STAGE 6 COMPLETE - RETURNING URL (Fallback - No Content Generation)")
+                    logger.info(f"   Response type: {response.get('type')}")
+                    logger.info(f"   URL returned: {response.get('url')}")
+                    logger.info(f"   Presentation ID: {api_response.get('id', 'N/A')}")
+                    logger.info(f"   Content generated: {response.get('content_generated')}")
+                    logger.info(f"   Slide count: {response.get('slide_count')}")
+                    logger.info(f"   Message: {response.get('message')}")
+                    logger.info("="*80)
                 else:
                     # Return enriched presentation object if deck-builder disabled
                     response = enriched_presentation if enriched_presentation else strawman

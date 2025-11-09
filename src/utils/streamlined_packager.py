@@ -178,6 +178,21 @@ class StreamlinedMessagePackager:
         # Message 1: Slide update with structured slide data
         slide_data = self._convert_slides_to_data(strawman)
 
+        # v3.4 DIAGNOSTIC: Detailed logging for preview_url packaging
+        preview_url_value = strawman.preview_url if hasattr(strawman, 'preview_url') else None
+
+        from src.utils.logger import setup_logger
+        logger = setup_logger(__name__)
+        logger.info("="*80)
+        logger.info("📦 PACKAGING STAGE 4 SLIDE_UPDATE")
+        logger.info(f"   strawman type: {type(strawman)}")
+        logger.info(f"   strawman class name: {strawman.__class__.__name__}")
+        logger.info(f"   hasattr check: {hasattr(strawman, 'preview_url')}")
+        logger.info(f"   preview_url value: {preview_url_value}")
+        logger.info(f"   strawman.main_title: {strawman.main_title}")
+        logger.info(f"   Total slides: {len(slide_data)}")
+        logger.info("="*80)
+
         messages.append(
             create_slide_update(
                 session_id=session_id,
@@ -188,7 +203,7 @@ class StreamlinedMessagePackager:
                     "design_suggestions": strawman.design_suggestions,
                     "target_audience": strawman.target_audience,
                     "presentation_duration": strawman.presentation_duration,
-                    "preview_url": strawman.preview_url if hasattr(strawman, 'preview_url') else None
+                    "preview_url": preview_url_value
                 },
                 slides=slide_data
             )
