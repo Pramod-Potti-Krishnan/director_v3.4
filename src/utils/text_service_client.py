@@ -6,7 +6,6 @@ Integration with Text & Table Builder v1.2 Railway service.
 
 Service Details:
 - Production URL: https://web-production-5daf.up.railway.app (v1.2)
-- Legacy URL: https://web-production-e3796.up.railway.app (v1.0/v1.1)
 - Synchronous API (5-15s response time)
 - v1.2: Element-based content generation + hero slide endpoints
 - LLM-powered with Gemini via Vertex AI with ADC
@@ -26,8 +25,8 @@ class TextServiceClient:
     """
     Text & Table Builder service client for v3.1.
 
-    Simplified version focusing on TEXT ONLY generation.
-    No batch processing, no complex orchestration.
+    DEPRECATED: Use TextServiceClientV1_2 for new code.
+    This client is kept for backward compatibility only.
     """
 
     def __init__(self, base_url: str = None):
@@ -37,7 +36,7 @@ class TextServiceClient:
         Args:
             base_url: Override URL (default: production Railway URL)
         """
-        self.base_url = base_url or "https://web-production-e3796.up.railway.app"
+        self.base_url = base_url or "https://web-production-5daf.up.railway.app"
         self.api_base = f"{self.base_url}/api/v1"
         self.timeout = 60  # 60 seconds timeout
 
