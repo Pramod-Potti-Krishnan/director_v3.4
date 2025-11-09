@@ -178,20 +178,20 @@ class StreamlinedMessagePackager:
         # Message 1: Slide update with structured slide data
         slide_data = self._convert_slides_to_data(strawman)
 
-        # v3.4 DIAGNOSTIC: Detailed logging for preview_url packaging
+        # v3.4 DIAGNOSTIC: Detailed logging for preview_url packaging (using print for Railway visibility)
         preview_url_value = strawman.preview_url if hasattr(strawman, 'preview_url') else None
 
-        from src.utils.logger import setup_logger
-        logger = setup_logger(__name__)
-        logger.info("="*80)
-        logger.info("📦 PACKAGING STAGE 4 SLIDE_UPDATE")
-        logger.info(f"   strawman type: {type(strawman)}")
-        logger.info(f"   strawman class name: {strawman.__class__.__name__}")
-        logger.info(f"   hasattr check: {hasattr(strawman, 'preview_url')}")
-        logger.info(f"   preview_url value: {preview_url_value}")
-        logger.info(f"   strawman.main_title: {strawman.main_title}")
-        logger.info(f"   Total slides: {len(slide_data)}")
-        logger.info("="*80)
+        import sys
+        print("="*80, flush=True)
+        print("📦 PACKAGING STAGE 4 SLIDE_UPDATE", flush=True)
+        print(f"   strawman type: {type(strawman)}", flush=True)
+        print(f"   strawman class name: {strawman.__class__.__name__}", flush=True)
+        print(f"   hasattr check: {hasattr(strawman, 'preview_url')}", flush=True)
+        print(f"   preview_url value: {preview_url_value}", flush=True)
+        print(f"   strawman.main_title: {strawman.main_title}", flush=True)
+        print(f"   Total slides: {len(slide_data)}", flush=True)
+        print("="*80, flush=True)
+        sys.stdout.flush()
 
         messages.append(
             create_slide_update(

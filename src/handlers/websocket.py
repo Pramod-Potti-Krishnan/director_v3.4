@@ -92,28 +92,30 @@ class WebSocketHandler:
             # Use model_dump with mode='json' for proper serialization
             message_data = message.model_dump(mode='json')
 
-            # v3.4 DIAGNOSTIC: Detailed message transmission logging
-            logger.info("="*80)
-            logger.info(f"📤 SENDING MESSAGE {i+1}/{len(messages)}")
-            logger.info(f"   Type: {message_data.get('type')}")
-            logger.info(f"   Session: {message_data.get('data', {}).get('session_id', 'N/A')}")
+            # v3.4 DIAGNOSTIC: Detailed message transmission logging (using print for Railway visibility)
+            import sys
+            print("="*80, flush=True)
+            print(f"📤 SENDING MESSAGE {i+1}/{len(messages)}", flush=True)
+            print(f"   Type: {message_data.get('type')}", flush=True)
+            print(f"   Session: {message_data.get('data', {}).get('session_id', 'N/A')}", flush=True)
 
             # Special logging for slide_update messages
             if message_data.get('type') == 'slide_update':
                 metadata = message_data.get('data', {}).get('metadata', {})
-                logger.info(f"   📋 Slide Update Metadata:")
-                logger.info(f"      - preview_url: {metadata.get('preview_url')}")
-                logger.info(f"      - main_title: {metadata.get('main_title')}")
-                logger.info(f"      - slide_count: {len(message_data.get('data', {}).get('slides', []))}")
+                print(f"   📋 Slide Update Metadata:", flush=True)
+                print(f"      - preview_url: {metadata.get('preview_url')}", flush=True)
+                print(f"      - main_title: {metadata.get('main_title')}", flush=True)
+                print(f"      - slide_count: {len(message_data.get('data', {}).get('slides', []))}", flush=True)
 
             # Special logging for presentation_url messages
             if message_data.get('type') == 'presentation_url':
-                logger.info(f"   🔗 Presentation URL Message:")
-                logger.info(f"      - url: {message_data.get('data', {}).get('url')}")
-                logger.info(f"      - presentation_id: {message_data.get('data', {}).get('presentation_id')}")
-                logger.info(f"      - message: {message_data.get('data', {}).get('message')}")
+                print(f"   🔗 Presentation URL Message:", flush=True)
+                print(f"      - url: {message_data.get('data', {}).get('url')}", flush=True)
+                print(f"      - presentation_id: {message_data.get('data', {}).get('presentation_id')}", flush=True)
+                print(f"      - message: {message_data.get('data', {}).get('message')}", flush=True)
 
-            logger.info("="*80)
+            print("="*80, flush=True)
+            sys.stdout.flush()
 
             await websocket.send_json(message_data)
 
@@ -322,14 +324,16 @@ class WebSocketHandler:
 
             # Update state if it changed
             if next_state != session.current_state:
-                # v3.4 DIAGNOSTIC: Detailed state transition logging
-                logger.info("="*80)
-                logger.info("🔄 STATE TRANSITION")
-                logger.info(f"   FROM: {session.current_state}")
-                logger.info(f"   TO: {next_state}")
-                logger.info(f"   Intent: {intent.intent_type} (confidence: {intent.confidence})")
-                logger.info(f"   User input: {user_input[:100] if len(user_input) <= 100 else user_input[:100] + '...'}")
-                logger.info("="*80)
+                # v3.4 DIAGNOSTIC: Detailed state transition logging (using print for Railway visibility)
+                import sys
+                print("="*80, flush=True)
+                print("🔄 STATE TRANSITION", flush=True)
+                print(f"   FROM: {session.current_state}", flush=True)
+                print(f"   TO: {next_state}", flush=True)
+                print(f"   Intent: {intent.intent_type} (confidence: {intent.confidence})", flush=True)
+                print(f"   User input: {user_input[:100] if len(user_input) <= 100 else user_input[:100] + '...'}", flush=True)
+                print("="*80, flush=True)
+                sys.stdout.flush()
                 await self.sessions.update_state(session.id, self.current_user_id, next_state)
                 session.current_state = next_state
 
@@ -403,18 +407,20 @@ class WebSocketHandler:
                     )
                     logger.info(f"Saved strawman to session {session.id} ({len(strawman_data.get('slides', []))} slides)")
 
-                    # v3.4 DIAGNOSTIC: Verify session data storage
+                    # v3.4 DIAGNOSTIC: Verify session data storage (using print for Railway visibility)
                     session = await self.sessions.get_or_create(session.id, self.current_user_id)
                     saved_data = session.presentation_strawman
-                    logger.info("="*80)
-                    logger.info("💾 SESSION DATA VERIFICATION (Strawman)")
-                    logger.info(f"   Data saved: {strawman_data is not None}")
-                    logger.info(f"   Data retrieved from session: {saved_data is not None}")
+                    import sys
+                    print("="*80, flush=True)
+                    print("💾 SESSION DATA VERIFICATION (Strawman)", flush=True)
+                    print(f"   Data saved: {strawman_data is not None}", flush=True)
+                    print(f"   Data retrieved from session: {saved_data is not None}", flush=True)
                     if saved_data:
-                        logger.info(f"   Has preview_url in saved data: {'preview_url' in saved_data}")
-                        logger.info(f"   Preview URL value in session: {saved_data.get('preview_url')}")
-                        logger.info(f"   Slide count in session: {len(saved_data.get('slides', []))}")
-                    logger.info("="*80)
+                        print(f"   Has preview_url in saved data: {'preview_url' in saved_data}", flush=True)
+                        print(f"   Preview URL value in session: {saved_data.get('preview_url')}", flush=True)
+                        print(f"   Slide count in session: {len(saved_data.get('slides', []))}", flush=True)
+                    print("="*80, flush=True)
+                    sys.stdout.flush()
 
                     # Also save URL if available
                     if presentation_url:
