@@ -4,7 +4,7 @@ v3.3: Secure authentication using Application Default Credentials (ADC)
 """
 import os
 import json
-from typing import Union, Dict, Any
+from typing import Union, Dict, Any, List
 from pydantic_ai import Agent
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.exceptions import ModelHTTPError
