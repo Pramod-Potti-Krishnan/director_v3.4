@@ -64,7 +64,7 @@ Fill these with creative and relevant information based on the user's request sp
   "**Goal:** To compare different solution options side-by-side. **Content:** A comparison table with columns: Solution Name | Cost | Timeline | Key Benefits | Limitations. Include 4-5 rows for different options. **Style:** Professional table with alternating row colors and clear headers."
   ```
 
-- **structure_preference:** Provide a simple layout suggestion, e.g., "Two-column layout with chart on the left" or "Full-bleed hero image with text overlay."
+- **structure_preference:** **CRITICAL:** Provide a layout suggestion that includes CLASSIFICATION KEYWORDS from the Slide Type Taxonomy below. This field determines how the slide will be visually formatted. Examples: "Matrix comparing speed vs accuracy", "Grid of 6 key features", "Comparison of 3 pricing options". See "Slide Type Taxonomy & Keywords" section below for required keywords.
 
 **Note for Executive Presentations:** When the audience includes executives or board members, strongly consider adding an "Executive Summary" slide immediately after the title slide, presenting 2-4 key findings or metrics in a Grid Layout format.
 
@@ -104,3 +104,130 @@ Before you create a brief for `analytics_needed`, `visuals_needed`, or `diagrams
 * **Includes:** Comparison tables, feature matrices, pricing tables, data grids, summary tables, decision matrices.
 * **Keywords:** table, comparison, grid, matrix, rows, columns, structured data.
 * **Think:** Is this something that needs rows and columns to organize information systematically?
+
+---
+
+## Slide Type Taxonomy & Classification Keywords
+
+**CRITICAL FOR VISUAL DIVERSITY:** The `structure_preference` field MUST include specific keywords that determine the slide's visual format. Including these keywords ensures your presentation uses diverse, professional layouts instead of defaulting to basic single-column layouts.
+
+### 13 Professional Slide Types (Use These Keywords)
+
+#### 1. **Impact Quote** (For Testimonials & Powerful Statements)
+**Keywords to use:** "quote", "quotation", "testimonial", "stated", "said by"
+**When to use:** Customer testimonials, expert quotes, mission statements, powerful statements
+**Example structure_preference:** "Large quote from CEO with attribution and company logo"
+
+#### 2. **Metrics Grid** (For KPIs & Key Numbers)
+**Keywords to use:** "metric", "kpi", "statistic", "number", "figure", "data point", "performance indicator"
+**When to use:** Dashboard-style KPIs, quarterly metrics, performance indicators
+**Example structure_preference:** "Metrics grid showing 4 key performance indicators with trend arrows"
+
+#### 3. **Matrix Layout** (For 2×2 or 2×3 Frameworks)
+**Keywords to use:** "matrix", "quadrant", "2x2", "2 x 2", "four quadrants", "pros vs cons", "benefits vs drawbacks", "swot", "strengths weaknesses"
+**When to use:** SWOT analysis, 2×2 matrices, trade-off comparisons, strategic frameworks
+**Example structure_preference:** "Matrix comparing cost vs quality in four quadrants"
+
+#### 4. **Grid Layout** (For Feature Showcases & Catalogs)
+**Keywords to use:** "grid", "3x3", "2x3", "3x2", "catalog", "gallery", "showcase", "collection", "6 items", "9 elements", "portfolio", "feature set"
+**When to use:** Feature showcases, product catalogs, team introductions, service offerings
+**Example structure_preference:** "Grid of 6 product features with icons and descriptions"
+
+#### 5. **Comparison** (For Side-by-Side Options)
+**Keywords to use:** "compare", "comparison", "versus", "vs", "vs.", "option a", "option b", "alternative", "choose between", "differences between", "which option", "side by side"
+**When to use:** Comparing products, pricing tiers, solution options, before/after scenarios
+**Example structure_preference:** "Comparison of 3 pricing tiers side by side"
+
+#### 6. **Sequential** (For Steps & Processes)
+**Keywords to use:** "step", "stage", "phase", "sequential", "process", "workflow", "roadmap", "timeline steps", "3 steps", "4 phases"
+**When to use:** Implementation roadmaps, process flows, step-by-step guides, phased approaches
+**Example structure_preference:** "Sequential 4-step implementation process with arrows"
+
+#### 7. **Asymmetric** (For Main Content + Sidebar)
+**Keywords to use:** "asymmetric", "sidebar", "main content plus supporting info", "primary plus secondary", "8:4 split"
+**When to use:** Main content with supporting details, feature with benefits list, case study with stats
+**Example structure_preference:** "Asymmetric layout with main case study and sidebar statistics"
+
+#### 8. **Hybrid** (For Overview + Details)
+**Keywords to use:** "hybrid", "overview plus details", "summary plus breakdown", "header with grid below"
+**When to use:** Section overview with supporting details, summary with specific examples
+**Example structure_preference:** "Hybrid layout with top summary and 2x2 details grid below"
+
+#### 9. **Styled Table** (For Structured Data Comparisons)
+**Keywords to use:** "table", "rows", "columns", "data grid", "comparison table", "feature matrix", "structured comparison"
+**When to use:** Feature comparisons, pricing tables, specification sheets, decision matrices
+**Example structure_preference:** "Styled table comparing 4 solutions across 5 criteria"
+
+#### 10. **Single Column** (For Dense Content or Lists)
+**Keywords to use:** "single column", "list", "sections", "bullet points", "3 sections", "4 sections", "detailed breakdown"
+**When to use:** Only when other formats don't fit - detailed explanations, methodology descriptions
+**Example structure_preference:** "Single column with 4 detailed sections and bullet points"
+
+#### 11-13. **Hero Slides** (Automatically Detected)
+These are automatically detected and don't need keywords:
+- **Title Slide:** First slide of presentation
+- **Section Divider:** Transition slides between major sections
+- **Closing Slide:** Final thank you/contact slide
+
+---
+
+## Presentation Diversity Guidelines
+
+**CRITICAL RULE:** Vary your slide layouts to create visual interest and engagement. Follow these diversity rules:
+
+### Diversity Rules:
+1. **Avoid Repetition:** Do NOT use the same slide type for more than 2 consecutive slides (unless they're in a Semantic Group - see below)
+2. **Mix It Up:** Use at least 5-7 different slide types across a 10+ slide presentation
+3. **Strategic Variety:** After 2 matrix slides, switch to grid, comparison, or sequential
+4. **Match Content to Format:**
+   - Comparisons → use Comparison or Matrix format
+   - Features → use Grid format
+   - Process/Steps → use Sequential format
+   - Statistics → use Metrics format
+
+### Semantic Grouping (EXCEPTION to Diversity Rules):
+
+**When similar content SHOULD use the same format:**
+
+If you're presenting multiple items of the same category (e.g., "3 use cases", "4 customer stories", "5 product features"), these slides should:
+1. Use the SAME slide type for visual consistency
+2. Use the SAME structure_preference pattern
+3. Be marked with a shared semantic group identifier
+
+**How to mark Semantic Groups:**
+Include a marker in the slide's `narrative` field:
+- "**[GROUP: use_cases]** This case study demonstrates..."
+- "**[GROUP: customer_stories]** Client testimonial from..."
+- "**[GROUP: product_features]** Feature #2 overview..."
+
+**Examples of Semantic Groups:**
+- 3 use cases analyzing different industries → all use Matrix 2×2
+- 4 customer testimonials → all use Impact Quote format
+- 6 product features → all use Grid format
+- 5 implementation phases → all use Sequential format
+
+**Why this matters:** Users expect visual consistency when comparing similar items. Three use cases should look alike for easy comparison, even though it breaks the normal diversity rule.
+
+---
+
+## Revised structure_preference Instructions
+
+When writing `structure_preference`, you MUST:
+1. ✅ **Include classification keywords** from the taxonomy above
+2. ✅ **Describe the visual layout** clearly
+3. ✅ **Match content to format** (comparisons → comparison format, features → grid format)
+4. ✅ **Avoid repetition** unless slides are in a semantic group
+
+**GOOD Examples:**
+- "Matrix comparing cost vs quality in four quadrants" ← Contains "matrix" keyword
+- "Grid of 6 key capabilities with icons" ← Contains "grid" keyword
+- "Comparison of 3 pricing tiers side by side" ← Contains "comparison" keyword
+- "Sequential 4-step onboarding process" ← Contains "sequential" keyword
+- "Metrics grid showing quarterly KPIs" ← Contains "metric" keyword
+
+**BAD Examples (will default to basic single-column):**
+- "Two-column layout" ← Too generic, no keywords
+- "Chart on left, text on right" ← Describes layout but no classification keyword
+- "Professional modern design" ← Vague, no structure specified
+
+---

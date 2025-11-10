@@ -16,6 +16,7 @@ from src.models.agents import (
 from src.models.layout_selection import LayoutSelection  # v3.2: AI layout selection
 from src.utils.logger import setup_logger
 from src.utils.slide_type_classifier import SlideTypeClassifier  # v3.4: Slide classification
+from src.utils.diversity_tracker import DiversityTracker  # v3.4-diversity: Variant diversity enforcement
 from src.utils.logfire_config import instrument_agents
 from src.utils.context_builder import ContextBuilder
 from src.utils.token_tracker import TokenTracker
@@ -375,6 +376,10 @@ class DirectorAgent:
                     logger.warning("⚠️  Will use fallback default variants instead")
                     # Don't initialize variant_selector - this triggers fallback logic in slide processing
 
+                # v3.4-diversity: Initialize diversity tracker for variant selection
+                diversity_tracker = DiversityTracker(max_consecutive_variant=2, max_consecutive_type=3)
+                logger.info("✅ Initialized diversity tracker (max_consecutive: variant=2, type=3)")
+
                 previous_slide_type = None
                 for idx, slide in enumerate(strawman.slides):
                     # Determine slide position
@@ -412,6 +417,25 @@ class DirectorAgent:
                     )
                     slide.slide_type_classification = slide_type_classification
 
+                    # v3.4-diversity: Detect semantic group (if any)
+                    semantic_group = SlideTypeClassifier.detect_semantic_group(slide)
+
+                    # v3.4-diversity: Check diversity rules and potentially override classification
+                    should_override, suggested_classification = diversity_tracker.should_override_for_diversity(
+                        classification=slide_type_classification,
+                        variant_id=None,  # Don't know variant yet
+                        semantic_group=semantic_group
+                    )
+
+                    if should_override and suggested_classification:
+                        original_classification = slide_type_classification
+                        slide_type_classification = suggested_classification
+                        slide.slide_type_classification = suggested_classification
+                        logger.info(
+                            f"📊 Diversity override: '{original_classification}' → '{suggested_classification}' "
+                            f"for slide {slide.slide_number} (reason: consecutive limit)"
+                        )
+
                     # v3.4: Generate content guidance for specialized text generators
                     content_guidance = self._generate_content_guidance(
                         slide=slide,
@@ -441,6 +465,14 @@ class DirectorAgent:
                         fallback = SlideTypeMapper.get_default_variant(slide_type_classification)
                         slide.variant_id = fallback
                         logger.info(f"Variant catalog unavailable, using default variant '{fallback}' for slide {slide.slide_number}")
+
+                    # v3.4-diversity: Track slide for diversity metrics
+                    diversity_tracker.add_slide(
+                        classification=slide_type_classification,
+                        variant_id=slide.variant_id,
+                        semantic_group=semantic_group,
+                        slide_number=slide.slide_number
+                    )
 
                     # v3.4-v1.2: Generate slide title with LLM (50 char limit) + retry logic
                     try:
@@ -499,6 +531,20 @@ class DirectorAgent:
                         await asyncio.sleep(delay)
 
                 logger.info(f"✅ Assigned layouts, classifications, and content guidance to all {total_slides} slides")
+
+                # v3.4-diversity: Log diversity metrics
+                diversity_metrics = diversity_tracker.get_diversity_metrics()
+                logger.info("="*70)
+                logger.info("📊 VARIANT DIVERSITY METRICS:")
+                logger.info(f"   Total Slides: {diversity_metrics['total_slides']}")
+                logger.info(f"   Unique Classifications: {diversity_metrics['unique_classifications']}")
+                logger.info(f"   Unique Variants: {diversity_metrics['unique_variants']}")
+                logger.info(f"   Diversity Score: {diversity_metrics['diversity_score']}/100")
+                logger.info(f"   Classification Distribution: {diversity_metrics['classification_distribution']}")
+                logger.info(f"   Variant Distribution: {diversity_metrics['variant_distribution']}")
+                if diversity_metrics['semantic_groups']:
+                    logger.info(f"   Semantic Groups Detected: {diversity_metrics['semantic_groups']}")
+                logger.info("="*70)
 
                 # v3.4-v1.2: Generate presentation footer text (20 char limit)
                 try:

@@ -39,16 +39,76 @@ class SlideTypeClassifier:
     - single_column: Dense single-column (default)
     """
 
-    # Keywords for classification
-    QUOTE_KEYWORDS = {"quote", "quotation", "testimonial", "said", "stated"}
-    METRICS_KEYWORDS = {"metric", "kpi", "statistic", "number", "figure", "data point"}
-    MATRIX_KEYWORDS = {"matrix", "quadrant", "2x2", "four", "axis"}
-    GRID_KEYWORDS = {"grid", "3x3", "nine", "catalog", "framework"}
-    TABLE_KEYWORDS = {"table", "rows", "columns", "data grid", "comparison table"}
-    COMPARISON_KEYWORDS = {"compare", "comparison", "versus", "vs", "alternative", "option a", "option b"}
-    SEQUENTIAL_KEYWORDS = {"step", "stage", "phase", "sequential", "process", "three steps"}
-    HYBRID_KEYWORDS = {"hybrid", "overview + details", "summary + breakdown"}
-    ASYMMETRIC_KEYWORDS = {"asymmetric", "sidebar", "main + supporting"}
+    # Keywords for classification (v3.4-diversity: Expanded keyword sets)
+    # Aligned with generate_strawman.md taxonomy
+
+    QUOTE_KEYWORDS = {
+        "quote", "quotation", "testimonial", "said", "stated",
+        "said by", "according to", "states that", "believes that",
+        "mission statement", "vision statement", "powerful statement"
+    }
+
+    METRICS_KEYWORDS = {
+        "metric", "kpi", "statistic", "number", "figure", "data point",
+        "performance indicator", "key metric", "dashboard", "scorecard",
+        "trend arrow", "growth", "improvement", "quarterly metric"
+    }
+
+    MATRIX_KEYWORDS = {
+        "matrix", "quadrant", "2x2", "2 x 2", "four quadrants",
+        "pros vs cons", "pros and cons", "benefits vs drawbacks",
+        "trade-offs", "trade offs", "strengths weaknesses",
+        "swot", "swot analysis", "strategic framework",
+        "comparing", "comparison matrix"
+    }
+
+    GRID_KEYWORDS = {
+        "grid", "3x3", "2x3", "3x2", "2x2 grid", "nine",
+        "catalog", "gallery", "showcase", "collection",
+        "6 items", "9 elements", "6 features", "9 features",
+        "portfolio", "feature set", "capabilities", "offerings"
+    }
+
+    TABLE_KEYWORDS = {
+        "table", "rows", "columns", "data grid", "comparison table",
+        "feature matrix", "pricing table", "specification",
+        "structured comparison", "decision matrix", "summary table"
+    }
+
+    COMPARISON_KEYWORDS = {
+        "compare", "comparison", "versus", "vs", "vs.", "v.s.",
+        "option a", "option b", "option c", "alternative",
+        "choose between", "differences between", "which option",
+        "side by side", "side-by-side", "compare and contrast",
+        "tier 1", "tier 2", "tier 3", "plan comparison"
+    }
+
+    SEQUENTIAL_KEYWORDS = {
+        "step", "stage", "phase", "sequential", "process",
+        "workflow", "roadmap", "timeline steps",
+        "3 steps", "4 steps", "5 steps", "three steps", "four steps",
+        "4 phases", "5 phases", "implementation", "onboarding",
+        "journey", "pathway", "progression"
+    }
+
+    HYBRID_KEYWORDS = {
+        "hybrid", "overview + details", "overview plus details",
+        "summary + breakdown", "summary plus breakdown",
+        "header with grid", "top summary", "overview with"
+    }
+
+    ASYMMETRIC_KEYWORDS = {
+        "asymmetric", "sidebar", "main + supporting",
+        "main content plus supporting", "primary plus secondary",
+        "8:4 split", "main and sidebar", "case study with stats"
+    }
+
+    # v3.4-diversity: Single column keywords (for explicit detection)
+    SINGLE_COLUMN_KEYWORDS = {
+        "single column", "list", "sections", "bullet points",
+        "3 sections", "4 sections", "5 sections",
+        "detailed breakdown", "comprehensive list"
+    }
 
     @classmethod
     def classify(cls, slide: Slide, position: int, total_slides: int) -> str:
@@ -224,6 +284,33 @@ class SlideTypeClassifier:
             if keyword in text:
                 return True
         return False
+
+    @classmethod
+    def detect_semantic_group(cls, slide: Slide) -> Optional[str]:
+        """
+        Detect if slide is part of a semantic group (v3.4-diversity feature).
+
+        Looks for markers like **[GROUP: use_cases]** in the narrative field.
+
+        Args:
+            slide: Slide object
+
+        Returns:
+            Group identifier (e.g., "use_cases") or None if not in a group
+        """
+        narrative = slide.narrative or ""
+
+        # Pattern: **[GROUP: group_name]**
+        import re
+        pattern = r'\*\*\[GROUP:\s*([a-z_]+)\]\*\*'
+        match = re.search(pattern, narrative, re.IGNORECASE)
+
+        if match:
+            group_name = match.group(1).lower()
+            logger.debug(f"Detected semantic group: '{group_name}' in slide '{slide.title}'")
+            return group_name
+
+        return None
 
     @classmethod
     def classify_batch(cls, slides: List[Slide]) -> List[str]:
