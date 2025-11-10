@@ -97,22 +97,23 @@ class WebSocketHandler:
             print("="*80, flush=True)
             print(f"📤 SENDING MESSAGE {i+1}/{len(messages)}", flush=True)
             print(f"   Type: {message_data.get('type')}", flush=True)
-            print(f"   Session: {message_data.get('data', {}).get('session_id', 'N/A')}", flush=True)
+            print(f"   Session: {message_data.get('payload', {}).get('session_id', 'N/A')}", flush=True)
 
             # Special logging for slide_update messages
             if message_data.get('type') == 'slide_update':
-                metadata = message_data.get('data', {}).get('metadata', {})
+                metadata = message_data.get('payload', {}).get('metadata', {})
                 print(f"   📋 Slide Update Metadata:", flush=True)
                 print(f"      - preview_url: {metadata.get('preview_url')}", flush=True)
+                print(f"      - preview_presentation_id: {metadata.get('preview_presentation_id')}", flush=True)
                 print(f"      - main_title: {metadata.get('main_title')}", flush=True)
-                print(f"      - slide_count: {len(message_data.get('data', {}).get('slides', []))}", flush=True)
+                print(f"      - slide_count: {len(message_data.get('payload', {}).get('slides', []))}", flush=True)
 
             # Special logging for presentation_url messages
             if message_data.get('type') == 'presentation_url':
                 print(f"   🔗 Presentation URL Message:", flush=True)
-                print(f"      - url: {message_data.get('data', {}).get('url')}", flush=True)
-                print(f"      - presentation_id: {message_data.get('data', {}).get('presentation_id')}", flush=True)
-                print(f"      - message: {message_data.get('data', {}).get('message')}", flush=True)
+                print(f"      - url: {message_data.get('payload', {}).get('url')}", flush=True)
+                print(f"      - presentation_id: {message_data.get('payload', {}).get('presentation_id')}", flush=True)
+                print(f"      - message: {message_data.get('payload', {}).get('message')}", flush=True)
 
             print("="*80, flush=True)
             sys.stdout.flush()
