@@ -56,6 +56,16 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
     logger.info("Starting Director Agent API...")
 
+    # Check if API is disabled
+    if not settings.API_ENABLED:
+        logger.warning("⚠️  API_ENABLED is set to False - Director service is DISABLED")
+        logger.warning("⚠️  WebSocket connections will be rejected")
+        logger.warning("⚠️  Set API_ENABLED=true in .env to enable the service")
+        # Still allow startup for health checks, but connections will be rejected
+        yield
+        logger.info("Shutting down Director Agent API (was disabled)...")
+        return
+
     # Validate required configurations
     if not settings.SUPABASE_URL or not settings.SUPABASE_ANON_KEY:
         logger.error("FATAL: Supabase configuration missing!")
@@ -113,6 +123,12 @@ app.add_middleware(
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, session_id: str, user_id: str):
     """Handle WebSocket connections with user authentication."""
+    # Check if API is disabled
+    if not settings.API_ENABLED:
+        logger.warning(f"WebSocket connection rejected - API is disabled (session: {session_id}, user: {user_id})")
+        await websocket.close(code=1013, reason="Service temporarily unavailable - API disabled")
+        return
+
     # Validate parameters
     if not session_id or not user_id:
         logger.error("WebSocket connection attempted without session_id or user_id")
@@ -154,11 +170,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, user_id: str
 async def health_check():
     """Basic health check endpoint."""
     return {
-        "status": "healthy",
+        "status": "healthy" if settings.API_ENABLED else "disabled",
+        "api_enabled": settings.API_ENABLED,
         "service": "director-agent-api",
         "version": "1.0.0",
         "environment": settings.APP_ENV,
-        "architecture": "Phase 1 - State-Driven with Intent Routing"
+        "architecture": "Phase 1 - State-Driven with Intent Routing",
+        "message": "Service is running normally" if settings.API_ENABLED else "Service is disabled - WebSocket connections will be rejected"
     }
 
 # Version verification endpoint

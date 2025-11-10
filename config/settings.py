@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = Field("DEBUG", env="LOG_LEVEL")
     
     # API settings
+    API_ENABLED: bool = Field(True, env="API_ENABLED")
     API_HOST: str = Field("0.0.0.0", env="API_HOST")
     API_PORT: int = Field(8000, env="PORT")
     
