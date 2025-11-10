@@ -17,6 +17,7 @@ from src.models.layout_selection import LayoutSelection  # v3.2: AI layout selec
 from src.utils.logger import setup_logger
 from src.utils.slide_type_classifier import SlideTypeClassifier  # v3.4: Slide classification
 from src.utils.diversity_tracker import DiversityTracker  # v3.4-diversity: Variant diversity enforcement
+from src.utils.variant_analytics import VariantAnalytics  # v3.4-diversity: Variant usage analytics
 from src.utils.logfire_config import instrument_agents
 from src.utils.context_builder import ContextBuilder
 from src.utils.token_tracker import TokenTracker
@@ -95,6 +96,10 @@ class DirectorAgent:
         # Initialize context builder and token tracker
         self.context_builder = ContextBuilder()
         self.token_tracker = TokenTracker()
+
+        # v3.4-diversity: Initialize variant analytics tracker
+        self.variant_analytics = VariantAnalytics()
+        logger.info("✅ Variant analytics initialized")
 
         # v2.0: Initialize deck-builder components
         self.deck_builder_enabled = getattr(settings, 'DECK_BUILDER_ENABLED', True)
@@ -546,6 +551,18 @@ class DirectorAgent:
                     logger.info(f"   Semantic Groups Detected: {diversity_metrics['semantic_groups']}")
                 logger.info("="*70)
 
+                # v3.4-diversity: Record presentation analytics
+                try:
+                    self.variant_analytics.record_presentation(
+                        session_id=state_context.session_id,
+                        strawman=strawman,
+                        diversity_metrics=diversity_metrics,
+                        stage="GENERATE_STRAWMAN"
+                    )
+                    logger.debug("✅ Analytics recorded for presentation")
+                except Exception as e:
+                    logger.warning(f"Failed to record analytics: {e}")
+
                 # v3.4-v1.2: Generate presentation footer text (20 char limit)
                 try:
                     logger.info("Generating presentation footer text")
@@ -713,6 +730,39 @@ class DirectorAgent:
                 # Post-process to ensure asset fields are in correct format
                 strawman = AssetFormatter.format_strawman(strawman)
                 logger.info("Applied asset field formatting to refined strawman")
+
+                # v3.4-diversity: Record analytics for refined presentation
+                try:
+                    # Calculate basic diversity metrics for refined strawman
+                    from collections import Counter
+                    classifications = [
+                        s.slide_type_classification for s in strawman.slides
+                        if hasattr(s, 'slide_type_classification') and s.slide_type_classification
+                    ]
+                    variants = [
+                        s.variant_id for s in strawman.slides
+                        if hasattr(s, 'variant_id') and s.variant_id
+                    ]
+
+                    diversity_metrics = {
+                        "total_slides": len(strawman.slides),
+                        "unique_classifications": len(set(classifications)),
+                        "unique_variants": len(set(variants)),
+                        "diversity_score": min(100, int((len(set(classifications)) / len(strawman.slides)) * 100)),
+                        "classification_distribution": dict(Counter(classifications)),
+                        "variant_distribution": dict(Counter(variants)),
+                        "semantic_groups": {}  # Not tracked in refinement stage
+                    }
+
+                    self.variant_analytics.record_presentation(
+                        session_id=state_context.session_id,
+                        strawman=strawman,
+                        diversity_metrics=diversity_metrics,
+                        stage="REFINE_STRAWMAN"
+                    )
+                    logger.debug("✅ Analytics recorded for refined presentation")
+                except Exception as e:
+                    logger.warning(f"Failed to record refinement analytics: {e}")
 
                 # v2.0: Transform and send to deck-builder API
                 if self.deck_builder_enabled:
