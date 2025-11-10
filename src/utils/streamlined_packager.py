@@ -180,14 +180,17 @@ class StreamlinedMessagePackager:
 
         # v3.4 DIAGNOSTIC: Detailed logging for preview_url packaging (using print for Railway visibility)
         preview_url_value = strawman.preview_url if hasattr(strawman, 'preview_url') else None
+        preview_presentation_id_value = strawman.preview_presentation_id if hasattr(strawman, 'preview_presentation_id') else None
 
         import sys
         print("="*80, flush=True)
         print("📦 PACKAGING STAGE 4 SLIDE_UPDATE", flush=True)
         print(f"   strawman type: {type(strawman)}", flush=True)
         print(f"   strawman class name: {strawman.__class__.__name__}", flush=True)
-        print(f"   hasattr check: {hasattr(strawman, 'preview_url')}", flush=True)
+        print(f"   hasattr preview_url: {hasattr(strawman, 'preview_url')}", flush=True)
         print(f"   preview_url value: {preview_url_value}", flush=True)
+        print(f"   hasattr preview_presentation_id: {hasattr(strawman, 'preview_presentation_id')}", flush=True)
+        print(f"   preview_presentation_id value: {preview_presentation_id_value}", flush=True)
 
         # v3.4 FIX: Show warning if preview_url is None
         if not preview_url_value:
@@ -216,7 +219,8 @@ class StreamlinedMessagePackager:
                     "design_suggestions": strawman.design_suggestions,
                     "target_audience": strawman.target_audience,
                     "presentation_duration": strawman.presentation_duration,
-                    "preview_url": preview_url_value
+                    "preview_url": preview_url_value,
+                    "preview_presentation_id": preview_presentation_id_value
                 },
                 slides=slide_data
             )
