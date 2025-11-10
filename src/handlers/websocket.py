@@ -115,6 +115,14 @@ class WebSocketHandler:
                 print(f"      - presentation_id: {message_data.get('payload', {}).get('presentation_id')}", flush=True)
                 print(f"      - message: {message_data.get('payload', {}).get('message')}", flush=True)
 
+            # v3.4 CRITICAL DIAGNOSTIC: Print complete JSON for slide_update messages
+            if message_data.get('type') == 'slide_update':
+                import json
+                print("="*80, flush=True)
+                print("🔍 COMPLETE WEBSOCKET JSON BEING SENT:", flush=True)
+                print(json.dumps(message_data, indent=2, default=str)[:2000])  # First 2000 chars
+                print("="*80, flush=True)
+
             print("="*80, flush=True)
             sys.stdout.flush()
 
