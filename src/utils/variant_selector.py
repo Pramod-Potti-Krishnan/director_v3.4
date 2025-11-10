@@ -62,34 +62,49 @@ class VariantSelector:
     def select_variant(
         self,
         director_classification: str,
+        layout_id: str,
         context: Optional[str] = None
     ) -> Optional[str]:
         """
         Select variant_id for a Director classification using randomization.
 
+        CRITICAL: Enforces L25/L29 layout constraint:
+        - L25 (content layouts) → ONLY content variants (hero variants BLOCKED)
+        - L29 (full-bleed layouts) → ONLY hero variants (content variants BLOCKED)
+
         Selection Process:
         1. Map director_classification → v1.2 slide type
         2. Get available variants for that slide type
-        3. Randomly select one (equal probability)
-        4. Return selected variant_id
+        3. Filter variants by layout_id constraint (L25 vs L29)
+        4. Randomly select one from valid variants (equal probability)
+        5. Return selected variant_id
 
         Args:
             director_classification: Director's 13-type classification
                 (e.g., "matrix_2x2", "title_slide", "bilateral_comparison")
+            layout_id: Layout identifier - MUST be "L25" or "L29"
             context: Optional context hint (currently unused, reserved for future)
 
         Returns:
             Selected variant_id (e.g., "matrix_2x3", "hero_opening_centered")
-            None if no variants found
+            None if no valid variants found after layout constraint filtering
 
         Example:
-            >>> selector.select_variant("matrix_2x2")
-            "matrix_2x3"  # Randomly selected from ["matrix_2x2", "matrix_2x3"]
+            >>> selector.select_variant("matrix_2x2", layout_id="L25")
+            "matrix_2x3"  # Content variant - valid for L25
 
-            >>> selector.select_variant("grid_3x3")
-            "grid_4x2_catalog"  # Randomly selected from 9 grid variants
+            >>> selector.select_variant("title_slide", layout_id="L29")
+            "hero_centered"  # Hero variant - valid for L29
+
+            >>> selector.select_variant("title_slide", layout_id="L25")
+            None  # No hero variants allowed for L25 - fallback needed
         """
-        logger.debug(f"Selecting variant for '{director_classification}'")
+        logger.debug(f"Selecting variant for '{director_classification}' with layout_id='{layout_id}'")
+
+        # Validate layout_id
+        if layout_id not in ["L25", "L29"]:
+            logger.error(f"Invalid layout_id '{layout_id}'. Must be 'L25' or 'L29'")
+            return None
 
         # Step 1: Map to v1.2 slide type
         slide_type = self.mapper.map_to_slide_type(director_classification)
@@ -109,65 +124,119 @@ class VariantSelector:
             )
             return None
 
-        # Step 3: Random selection (equal probability)
-        selected_variant = random.choice(variants)
+        # Step 3: Filter variants by layout_id constraint
+        valid_variants = []
+        for variant_id in variants:
+            is_hero = self.catalog.is_hero_variant(variant_id)
+
+            # L25 constraint: BLOCK hero variants (only allow content variants)
+            if layout_id == "L25" and is_hero:
+                logger.debug(f"❌ Filtering out hero variant '{variant_id}' for L25 layout")
+                continue
+
+            # L29 constraint: BLOCK content variants (only allow hero variants)
+            if layout_id == "L29" and not is_hero:
+                logger.debug(f"❌ Filtering out content variant '{variant_id}' for L29 layout")
+                continue
+
+            # Variant passes layout constraint
+            valid_variants.append(variant_id)
+            logger.debug(f"✅ Variant '{variant_id}' valid for {layout_id} layout")
+
+        # Check if any valid variants remain after filtering
+        if not valid_variants:
+            logger.error(
+                f"⚠️  No valid variants for '{director_classification}' with layout_id='{layout_id}'. "
+                f"Original variants ({len(variants)}): {variants}. "
+                f"All filtered out due to layout constraint."
+            )
+            return None
+
+        # Step 4: Random selection from valid variants (equal probability)
+        selected_variant = random.choice(valid_variants)
 
         logger.info(
-            f"Selected '{selected_variant}' from {len(variants)} variants "
-            f"for '{director_classification}' (slide_type: '{slide_type}')"
+            f"✅ Selected '{selected_variant}' from {len(valid_variants)} valid variants "
+            f"for '{director_classification}' (layout: {layout_id}, slide_type: '{slide_type}')"
         )
-        logger.debug(f"Available variants were: {variants}")
+        logger.debug(f"Valid variants after layout filter: {valid_variants}")
 
         return selected_variant
 
     def select_variant_with_fallback(
         self,
         director_classification: str,
+        layout_id: str,
         fallback_variant_id: Optional[str] = None
     ) -> str:
         """
-        Select variant with fallback to first available or provided fallback.
+        Select variant with fallback to first valid variant for the layout.
 
-        This method never returns None - it always returns a valid variant_id.
+        This method never returns None - it always returns a valid variant_id
+        that respects the L25/L29 layout constraint.
 
         Args:
             director_classification: Director's classification
+            layout_id: Layout identifier - MUST be "L25" or "L29"
             fallback_variant_id: Specific fallback variant (optional)
 
         Returns:
             Selected variant_id (never None)
 
         Raises:
-            ValueError: If no variants available and no fallback provided
+            ValueError: If no valid variants available and no fallback provided
         """
-        # Try random selection
-        selected = self.select_variant(director_classification)
+        # Try random selection with layout constraint
+        selected = self.select_variant(director_classification, layout_id)
         if selected:
             return selected
 
-        # Fallback 1: Use provided fallback
+        # Fallback 1: Use provided fallback (if it matches layout constraint)
         if fallback_variant_id:
-            logger.warning(
-                f"Using provided fallback variant: '{fallback_variant_id}' "
-                f"for '{director_classification}'"
-            )
-            return fallback_variant_id
+            is_hero = self.catalog.is_hero_variant(fallback_variant_id)
 
-        # Fallback 2: Use first variant of slide type
+            # Validate fallback matches layout constraint
+            if (layout_id == "L25" and not is_hero) or (layout_id == "L29" and is_hero):
+                logger.warning(
+                    f"Using provided fallback variant: '{fallback_variant_id}' "
+                    f"for '{director_classification}' (layout: {layout_id})"
+                )
+                return fallback_variant_id
+            else:
+                logger.warning(
+                    f"Provided fallback '{fallback_variant_id}' violates {layout_id} constraint. "
+                    f"Searching for valid fallback..."
+                )
+
+        # Fallback 2: Use first valid variant that matches layout constraint
         slide_type = self.mapper.map_to_slide_type(director_classification)
         if slide_type:
             variants = self.catalog.get_variants_for_slide_type(slide_type)
-            if variants:
-                fallback = variants[0]
-                logger.warning(
-                    f"Using first available variant: '{fallback}' "
-                    f"for '{director_classification}'"
-                )
-                return fallback
 
-        # No variants available at all
+            # Filter variants by layout constraint
+            for variant_id in variants:
+                is_hero = self.catalog.is_hero_variant(variant_id)
+
+                # L25: Must be content variant (not hero)
+                if layout_id == "L25" and not is_hero:
+                    logger.warning(
+                        f"Using first valid variant: '{variant_id}' "
+                        f"for '{director_classification}' (L25 content variant)"
+                    )
+                    return variant_id
+
+                # L29: Must be hero variant
+                if layout_id == "L29" and is_hero:
+                    logger.warning(
+                        f"Using first valid variant: '{variant_id}' "
+                        f"for '{director_classification}' (L29 hero variant)"
+                    )
+                    return variant_id
+
+        # No variants available that match layout constraint
         raise ValueError(
-            f"No variants available for '{director_classification}' and no fallback provided"
+            f"No valid variants available for '{director_classification}' "
+            f"with layout_id='{layout_id}' and no valid fallback provided"
         )
 
     def get_variant_count_for_classification(
@@ -192,13 +261,19 @@ class VariantSelector:
 
     def get_available_variants(
         self,
-        director_classification: str
+        director_classification: str,
+        layout_id: Optional[str] = None
     ) -> List[str]:
         """
         Get list of all available variant_ids for a classification.
 
+        If layout_id is provided, filters variants to only those valid for that layout:
+        - L25: Only content variants (hero variants excluded)
+        - L29: Only hero variants (content variants excluded)
+
         Args:
             director_classification: Director's classification
+            layout_id: Optional layout filter ("L25" or "L29")
 
         Returns:
             List of variant_ids (empty if none)
@@ -207,7 +282,26 @@ class VariantSelector:
         if not slide_type:
             return []
 
-        return self.catalog.get_variants_for_slide_type(slide_type)
+        variants = self.catalog.get_variants_for_slide_type(slide_type)
+
+        # If no layout filter, return all variants
+        if layout_id is None:
+            return variants
+
+        # Filter by layout constraint
+        valid_variants = []
+        for variant_id in variants:
+            is_hero = self.catalog.is_hero_variant(variant_id)
+
+            # L25: Only content variants (not hero)
+            if layout_id == "L25" and not is_hero:
+                valid_variants.append(variant_id)
+
+            # L29: Only hero variants
+            elif layout_id == "L29" and is_hero:
+                valid_variants.append(variant_id)
+
+        return valid_variants
 
     def validate_variant_selection(
         self,

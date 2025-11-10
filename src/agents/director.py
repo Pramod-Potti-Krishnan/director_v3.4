@@ -452,24 +452,43 @@ class DirectorAgent:
                     slide.content_guidance = content_guidance
 
                     # v3.4-v1.2: Select random variant from available options
+                    # CRITICAL: Pass layout_id to enforce L25/L29 constraint
                     if self.variant_selector and slide_type_classification:
                         try:
-                            variant_id = self.variant_selector.select_variant(slide_type_classification)
+                            variant_id = self.variant_selector.select_variant(
+                                director_classification=slide_type_classification,
+                                layout_id=slide.layout_id  # CRITICAL: Enforces L25/L29 constraint
+                            )
                             slide.variant_id = variant_id
-                            logger.debug(f"Selected variant '{variant_id}' for slide {slide.slide_number}")
+                            logger.debug(
+                                f"Selected variant '{variant_id}' for slide {slide.slide_number} "
+                                f"(layout: {slide.layout_id}, classification: {slide_type_classification})"
+                            )
                         except Exception as e:
                             logger.error(f"Variant selection failed for slide {slide.slide_number}: {e}")
-                            # Fallback to default variant
+                            # Fallback to layout-aware default variant
                             from src.utils.slide_type_mapper import SlideTypeMapper
-                            fallback = SlideTypeMapper.get_default_variant(slide_type_classification)
+                            fallback = SlideTypeMapper.get_default_variant(
+                                director_classification=slide_type_classification,
+                                layout_id=slide.layout_id  # CRITICAL: Layout-aware fallback
+                            )
                             slide.variant_id = fallback
-                            logger.warning(f"Using fallback variant '{fallback}' for slide {slide.slide_number}")
+                            logger.warning(
+                                f"Using layout-aware fallback variant '{fallback}' for slide {slide.slide_number} "
+                                f"(layout: {slide.layout_id})"
+                            )
                     elif slide_type_classification:
-                        # No variant selector available - use fallback defaults
+                        # No variant selector available - use layout-aware fallback defaults
                         from src.utils.slide_type_mapper import SlideTypeMapper
-                        fallback = SlideTypeMapper.get_default_variant(slide_type_classification)
+                        fallback = SlideTypeMapper.get_default_variant(
+                            director_classification=slide_type_classification,
+                            layout_id=slide.layout_id  # CRITICAL: Layout-aware fallback
+                        )
                         slide.variant_id = fallback
-                        logger.info(f"Variant catalog unavailable, using default variant '{fallback}' for slide {slide.slide_number}")
+                        logger.info(
+                            f"Variant catalog unavailable, using layout-aware default variant '{fallback}' "
+                            f"for slide {slide.slide_number} (layout: {slide.layout_id})"
+                        )
 
                     # v3.4-diversity: Track slide for diversity metrics
                     diversity_tracker.add_slide(
@@ -1031,10 +1050,12 @@ class DirectorAgent:
                 # Send enriched presentation to Layout Architect
                 if self.deck_builder_enabled and enriched_presentation:
                     try:
-                        deck_url = await self._send_enriched_to_layout_architect(enriched_presentation)
+                        layout_response = await self._send_enriched_to_layout_architect(enriched_presentation)
+                        deck_url = layout_response["url"]
                         response = {
                             "type": "presentation_url",
                             "url": deck_url,
+                            "presentation_id": layout_response["presentation_id"],
                             "slide_count": len(strawman.slides),
                             "content_generated": True,
                             "successful_slides": successful_slides,
@@ -2073,7 +2094,7 @@ Return ONLY the footer text, nothing else."""
             "format": format_type
         }
 
-    async def _send_enriched_to_layout_architect(self, enriched: 'EnrichedPresentationStrawman') -> str:
+    async def _send_enriched_to_layout_architect(self, enriched: 'EnrichedPresentationStrawman') -> Dict[str, str]:
         """
         Send enriched presentation to Layout Architect and get deck URL.
 
@@ -2081,7 +2102,7 @@ Return ONLY the footer text, nothing else."""
             enriched: EnrichedPresentationStrawman with generated text content
 
         Returns:
-            Full deck URL from Layout Architect
+            Dict with 'url' and 'presentation_id' keys
 
         Raises:
             Exception: If deck-builder call fails
@@ -2103,7 +2124,11 @@ Return ONLY the footer text, nothing else."""
 
         logger.info(f"Layout Architect created deck: {deck_url}")
 
-        return deck_url
+        # Return both URL and presentation_id for download API support
+        return {
+            "url": deck_url,
+            "presentation_id": api_response['id']
+        }
 
     def get_token_report(self, session_id: str) -> dict:
         """Get token usage report for a specific session."""

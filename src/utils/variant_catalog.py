@@ -237,6 +237,44 @@ class VariantCatalog:
 
         return self.get_variant_details(variant_id) is not None
 
+    def is_hero_variant(self, variant_id: str) -> bool:
+        """
+        Check if a variant is a hero variant (for L29 layouts only).
+
+        Hero variants belong to the "hero" slide_type and should ONLY be used
+        with L29 (full-bleed) layouts. They cannot be used with L25 (content) layouts.
+
+        Args:
+            variant_id: Variant ID to check (e.g., "hero_centered", "matrix_2x2")
+
+        Returns:
+            True if variant is a hero type (L29 only), False if content type (L25 only)
+
+        Raises:
+            RuntimeError: If catalog not loaded
+        """
+        if not self._loaded:
+            raise RuntimeError(
+                "Variant catalog not loaded. Call await load_catalog() first."
+            )
+
+        # Get variant details
+        details = self.get_variant_details(variant_id)
+
+        if details is None:
+            logger.warning(f"Variant '{variant_id}' not found, assuming non-hero (content) variant")
+            return False
+
+        # Check if slide_type is "hero"
+        slide_type = details.get("slide_type", "")
+        is_hero = slide_type == "hero"
+
+        logger.debug(
+            f"Variant '{variant_id}' is {'HERO (L29 only)' if is_hero else 'CONTENT (L25 only)'}"
+        )
+
+        return is_hero
+
 
 # Convenience function for loading catalog
 async def load_variant_catalog(text_service_url: str) -> VariantCatalog:

@@ -169,56 +169,83 @@ class SlideTypeMapper:
         return list(set(cls.TAXONOMY_TO_SLIDE_TYPE.values()))
 
     @classmethod
-    def get_default_variant(cls, director_classification: str) -> str:
+    def get_default_variant(cls, director_classification: str, layout_id: str) -> str:
         """
         Get default fallback variant when variant catalog is unavailable.
 
+        CRITICAL: Respects L25/L29 layout constraint:
+        - L25 (content layouts) → ONLY content variants (never hero)
+        - L29 (full-bleed layouts) → ONLY hero variants (never content)
+
         Used when Text Service v1.2 variant catalog fails to load.
-        Returns a safe default variant_id for each slide type.
+        Returns a safe default variant_id for each slide type, ensuring
+        the variant is valid for the specified layout.
 
         Args:
             director_classification: Director's 13-type classification
+            layout_id: Layout identifier - MUST be "L25" or "L29"
 
         Returns:
-            Default variant_id (e.g., "hero_centered", "matrix_2x2")
+            Default variant_id appropriate for the layout
+            (e.g., "hero_centered" for L29, "matrix_2x2" for L25)
 
         Example:
-            >>> SlideTypeMapper.get_default_variant("title_slide")
-            "hero_centered"
-            >>> SlideTypeMapper.get_default_variant("matrix_2x2")
-            "matrix_2x2"
+            >>> SlideTypeMapper.get_default_variant("title_slide", "L29")
+            "hero_centered"  # Hero variant for L29
+            >>> SlideTypeMapper.get_default_variant("title_slide", "L25")
+            "single_column_2section"  # Content variant for L25 (title_slide invalid for L25)
+            >>> SlideTypeMapper.get_default_variant("matrix_2x2", "L25")
+            "matrix_2x2"  # Content variant for L25
         """
-        # Default variants for each Director classification
-        # These are the most commonly used/stable variants from v1.2
-        DEFAULT_VARIANTS = {
-            # Hero types → hero_centered (most versatile)
-            "title_slide": "hero_centered",
-            "section_divider": "hero_centered",
-            "closing_slide": "hero_centered",
+        # LAYOUT-AWARE fallback logic
+        if layout_id == "L29":
+            # L29: Must use hero variant (only 1 option currently)
+            variant_id = "hero_centered"
+            logger.debug(
+                f"L29 layout: Using hero variant '{variant_id}' "
+                f"for classification '{director_classification}'"
+            )
+            return variant_id
 
-            # Content types → use base variants
-            "impact_quote": "impact_quote_centered",
-            "metrics_grid": "metrics_2col",
-            "matrix_2x2": "matrix_2x2",
-            "grid_3x3": "grid_3x3",
-            "styled_table": "table_2col",
-            "bilateral_comparison": "comparison_2col",
-            "sequential_3col": "sequential_3col",
-            "hybrid_1_2x2": "hybrid_1_2x2",
-            "asymmetric_8_4": "asymmetric_8_4",
-            "single_column": "single_column_2section"
-        }
+        elif layout_id == "L25":
+            # L25: Must use content variant (never hero)
 
-        variant_id = DEFAULT_VARIANTS.get(
-            director_classification,
-            "single_column_2section"  # Ultimate fallback
-        )
+            # Default content variants for each classification
+            # If classification is a hero type, we fall back to single_column
+            CONTENT_VARIANTS = {
+                # Content types → use base variants
+                "impact_quote": "impact_quote_centered",
+                "metrics_grid": "metrics_2col",
+                "matrix_2x2": "matrix_2x2",
+                "grid_3x3": "grid_3x3",
+                "styled_table": "table_2col",
+                "bilateral_comparison": "comparison_2col",
+                "sequential_3col": "sequential_3col",
+                "hybrid_1_2x2": "hybrid_1_2x2",
+                "asymmetric_8_4": "asymmetric_8_4",
+                "single_column": "single_column_2section",
 
-        logger.debug(
-            f"Using default variant '{variant_id}' for classification '{director_classification}'"
-        )
+                # Hero types → fallback to single_column (can't use hero on L25!)
+                "title_slide": "single_column_2section",
+                "section_divider": "single_column_2section",
+                "closing_slide": "single_column_2section",
+            }
 
-        return variant_id
+            variant_id = CONTENT_VARIANTS.get(
+                director_classification,
+                "single_column_2section"  # Ultimate fallback for L25
+            )
+
+            logger.debug(
+                f"L25 layout: Using content variant '{variant_id}' "
+                f"for classification '{director_classification}'"
+            )
+            return variant_id
+
+        else:
+            # Invalid layout_id - log error and fallback safely
+            logger.error(f"Invalid layout_id '{layout_id}'. Must be 'L25' or 'L29'. Using L25 fallback.")
+            return "single_column_2section"  # Safe default for invalid layout_id
 
     @classmethod
     def get_mapping_summary(cls) -> Dict[str, Dict[str, any]]:
