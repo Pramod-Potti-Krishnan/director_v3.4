@@ -674,6 +674,30 @@ class DirectorAgent:
                 refined_strawman = result.output  # PresentationStrawman object
                 logger.info(f"Generated refined strawman with {len(refined_strawman.slides)} slides")
 
+                # v3.4-diversity: Detect and log variant override requests
+                variant_override_detected = self._detect_variant_override(user_prompt)
+                if variant_override_detected:
+                    logger.info(f"🎨 Variant override detected in user request: '{user_prompt[:100]}...'")
+                    # Validate that structure_preference was updated with classification keywords
+                    overridden_slides = self._identify_overridden_slides(
+                        original=original_strawman,
+                        refined=refined_strawman
+                    )
+                    if overridden_slides:
+                        logger.info(
+                            f"✅ Variant overrides applied to {len(overridden_slides)} slide(s): "
+                            f"{[s.slide_number for s in overridden_slides]}"
+                        )
+                        for slide in overridden_slides:
+                            logger.debug(
+                                f"   Slide {slide.slide_number}: '{slide.structure_preference}'"
+                            )
+                    else:
+                        logger.warning(
+                            "⚠️ Variant override requested but no structure_preference changes detected. "
+                            "LLM may need more explicit keywords in refinement."
+                        )
+
                 # v3.4-v1.2: Merge refined with original, preserving v1.2 fields
                 strawman = self._merge_refined_strawman(
                     original=original_strawman,
@@ -1410,6 +1434,80 @@ Return ONLY the footer text, nothing else."""
             if len(fallback) > max_chars:
                 return fallback[:max_chars-3] + "..."
             return fallback
+
+    def _detect_variant_override(self, user_prompt: str) -> bool:
+        """
+        Detect if user request contains variant override intent.
+
+        v3.4-diversity: Recognizes patterns like:
+        - "make slide X a matrix"
+        - "change slide Y to grid format"
+        - "use comparison for slide Z"
+
+        Args:
+            user_prompt: User's refinement request
+
+        Returns:
+            True if variant override detected
+        """
+        import re
+
+        # Variant override patterns from refine_strawman.md
+        patterns = [
+            r'make slide \d+ (?:a |an )?(?:matrix|grid|comparison|sequential|metrics|quote|table|hybrid|asymmetric|single)',
+            r'change slide \d+ to (?:matrix|grid|comparison|sequential|metrics|quote|table|hybrid|asymmetric|single)',
+            r'use (?:matrix|grid|comparison|sequential|metrics|quote|table|hybrid|asymmetric|single) (?:for|format|layout) (?:for )?slide \d+',
+            r'format slide \d+ as (?:a |an )?(?:matrix|grid|comparison|sequential|metrics|quote|table|hybrid|asymmetric|single)',
+            r'slide \d+ should be (?:a |an )?(?:matrix|grid|comparison|sequential|metrics|quote|table|hybrid|asymmetric|single)',
+        ]
+
+        prompt_lower = user_prompt.lower()
+        for pattern in patterns:
+            if re.search(pattern, prompt_lower):
+                return True
+
+        return False
+
+    def _identify_overridden_slides(
+        self,
+        original: PresentationStrawman,
+        refined: PresentationStrawman
+    ) -> List[Any]:
+        """
+        Identify slides where structure_preference was changed.
+
+        v3.4-diversity: Used to validate that variant overrides were applied.
+
+        Args:
+            original: Original strawman before refinement
+            refined: Refined strawman after LLM update
+
+        Returns:
+            List of refined slides with changed structure_preference
+        """
+        from src.models.agents import Slide
+
+        overridden_slides: List[Slide] = []
+
+        # Create lookup of original slides by slide_number
+        original_slides_map = {
+            slide.slide_number: slide
+            for slide in original.slides
+        }
+
+        # Compare structure_preference for each refined slide
+        for refined_slide in refined.slides:
+            original_slide = original_slides_map.get(refined_slide.slide_number)
+
+            if original_slide:
+                # Check if structure_preference changed
+                original_pref = (original_slide.structure_preference or "").strip()
+                refined_pref = (refined_slide.structure_preference or "").strip()
+
+                if original_pref != refined_pref:
+                    overridden_slides.append(refined_slide)
+
+        return overridden_slides
 
     def _merge_refined_strawman(
         self,
