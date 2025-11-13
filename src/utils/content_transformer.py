@@ -156,6 +156,7 @@ class ContentTransformer:
 
         return {
             "layout": layout_id,
+            "variant_id": slide.variant_id,
             "content": content
         }
 
