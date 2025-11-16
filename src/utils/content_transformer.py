@@ -5,7 +5,8 @@ Transforms v1.0 PresentationStrawman to deck-builder API format.
 
 v3.2: Supports both structured JSON (from Text Service v1.1) and
       HTML/text (from Text Service v1.0) for backward compatibility.
-v3.4: Added HTML stripping for L02 Analytics compatibility.
+v3.4: L02 Analytics passthrough - preserves HTML from Analytics Service v3.
+      Layout Builder v7.5.1 handles HTML rendering with auto-detection.
 """
 from typing import Dict, Any, List, Union, Optional
 from datetime import datetime
@@ -78,11 +79,10 @@ class ContentTransformer:
     def _strip_html_tags(html_content: str) -> str:
         """
         Strip HTML tags from content, keeping text only.
-        Used for L02 element_2 compatibility with Layout Builder.
 
-        v3.4-analytics: Layout Builder L02 expects plain text for element_2,
-        but Analytics Service v3 sends HTML with <div>, <h3>, styling.
-        This strips all HTML tags to maintain compatibility.
+        DEPRECATED for Analytics L02: Layout Builder v7.5.1 now supports HTML
+        in element_2 with auto-detection. This method is kept for potential
+        other uses but is NO LONGER used for Analytics Service content.
 
         Args:
             html_content: HTML string with tags
@@ -330,50 +330,34 @@ class ContentTransformer:
 
                 return result
 
-            # v3.4-analytics: Handle Analytics Service v3 2-field response (element_3 + element_2)
+            # v3.4-analytics: Handle Analytics Service v3 L02 response (element_3 + element_2)
             # Analytics Service returns L02 layout with chart (element_3) and observations (element_2)
-            # We need to combine these into L25's single rich_content field
+            # Layout Builder v7.5.1 supports HTML in both fields with auto-detection
             if self._is_structured_content(generated_content):
                 # Check if this is analytics content with element_3 and element_2
                 if "element_3" in generated_content and "element_2" in generated_content:
-                    logger.info(f"Using Analytics Service v3 content (element_3 + element_2) for L25 slide: {slide.slide_id}")
+                    logger.info(f"Using Analytics Service v3 L02 content for slide: {slide.slide_id}")
 
-                    # Combine element_3 (chart, left) and element_2 (observations, right) into 2-column layout
+                    # ✅ Pass through HTML unchanged - Layout Builder v7.5.1 handles rendering
                     chart_html = generated_content.get("element_3", "")
                     observations_html = generated_content.get("element_2", "")
 
-                    # v3.4-analytics: Strip HTML tags from element_2 for L02 compatibility
-                    # Layout Builder L02 expects plain text for element_2, but Analytics Service sends HTML
-                    observations_text = self._strip_html_tags(observations_html)
-                    logger.info(f"Stripped HTML from element_2: {len(observations_html)} chars -> {len(observations_text)} chars")
+                    logger.info(
+                        f"L02 passthrough: element_3={len(chart_html)}chars, "
+                        f"element_2={len(observations_html)}chars"
+                    )
 
-                    # Create responsive 2-column layout within rich_content (1800×720px)
-                    # Left: 1260px (70%), Right: 480px (27%), Gap: 60px (3%)
-                    # v3.4-analytics: Use plain text for observations (stripped HTML)
-                    combined_html = f"""
-<div style="display: flex; gap: 60px; width: 100%; height: 720px;">
-    <div style="flex: 0 0 1260px; height: 720px;">
-        {chart_html}
-    </div>
-    <div style="flex: 0 0 480px; height: 720px; overflow-y: auto; padding: 32px; background: #f8f9fa; border-radius: 8px;">
-        <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: #1f2937;">Key Insights</h3>
-        <p style="margin: 0; font-size: 16px; line-height: 1.6; color: #374151;">{observations_text}</p>
-    </div>
-</div>
-"""
-
+                    # ✅ Create proper L02 structure (NOT L25 rich_content!)
+                    # Layout Builder v7.5.1 will auto-detect HTML and render correctly
+                    # Dimensions: element_3 (1260×720px), element_2 (540×720px)
                     result = {
-                        "slide_title": slide_title,  # Director's generated_title
-                        "rich_content": combined_html  # Combined analytics layout
+                        "slide_title": slide_title,           # Director provides
+                        "element_1": subtitle,                 # Director provides (subtitle)
+                        "element_3": chart_html,               # Analytics provides (chart HTML)
+                        "element_2": observations_html,        # Analytics provides (observations HTML)
+                        "presentation_name": footer,           # Director provides
+                        "company_logo": ""                     # Optional
                     }
-
-                    # Optional fields
-                    if 'subtitle' in fields:
-                        result["subtitle"] = subtitle  # Director's generated_subtitle
-                    if 'presentation_name' in fields:
-                        result["presentation_name"] = footer  # Director's footer_text
-                    if 'company_logo' in fields:
-                        result["company_logo"] = ""
 
                     return result
 

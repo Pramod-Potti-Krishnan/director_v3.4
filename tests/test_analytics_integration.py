@@ -199,9 +199,9 @@ async def test_analytics_client():
 
 
 async def test_content_transformer():
-    """Test 3: Verify ContentTransformer handles 2-field response."""
+    """Test 3: Verify ContentTransformer creates L02 structure with HTML passthrough."""
     print("\n" + "=" * 80)
-    print("TEST 3: ContentTransformer 2-Field Handling")
+    print("TEST 3: ContentTransformer L02 Passthrough")
     print("=" * 80)
 
     # Mock enriched slide with Analytics Service response
@@ -210,11 +210,11 @@ async def test_content_transformer():
     strawman = create_test_strawman_with_analytics()
     analytics_slide = strawman.slides[1]
 
-    # Mock analytics service response (2-field structure)
+    # Mock analytics service response (2-field structure with HTML)
     mock_analytics_response = {
         "content": {
-            "element_3": "<div>MOCK CHART HTML (1260x720)</div>",
-            "element_2": "<div>MOCK OBSERVATIONS TEXT (480x720)</div>"
+            "element_3": "<div style='width: 1260px; height: 720px;'>MOCK CHART HTML</div>",
+            "element_2": "<div style='padding: 32px; background: #f8f9fa;'><h3>Key Insights</h3><p>MOCK OBSERVATIONS TEXT</p></div>"
         },
         "metadata": {
             "service": "analytics_v3",
@@ -233,32 +233,44 @@ async def test_content_transformer():
     transformer = ContentTransformer()
     transformed = transformer.transform_slide(
         slide=analytics_slide,
-        layout_id="L25",
+        layout_id="L02",  # Changed from L25 to L02
         presentation=strawman,
         enriched_slide=enriched_slide
     )
 
     print(f"\nTransformed Slide:")
     print(f"   Layout: {transformed['layout']}")
-    print(f"   Variant ID: {transformed.get('variant_id')}")
+    print(f"   Content keys: {list(transformed['content'].keys())}")
 
-    # Verify rich_content combines both fields
+    # ✅ Verify L02 structure (NOT L25 rich_content!)
     content = transformed["content"]
+    assert transformed['layout'] == "L02", f"Wrong layout: {transformed['layout']}"
+    assert "element_3" in content, "Missing element_3"
+    assert "element_2" in content, "Missing element_2"
     assert "slide_title" in content, "Missing slide_title"
-    assert "rich_content" in content, "Missing rich_content"
+    assert "element_1" in content, "Missing element_1 (subtitle)"
+    assert "presentation_name" in content, "Missing presentation_name"
+    assert "rich_content" not in content, "Should NOT have rich_content (L25 field)"
 
-    rich_content = content["rich_content"]
-    assert "MOCK CHART HTML" in rich_content, "Chart HTML not in rich_content"
-    assert "MOCK OBSERVATIONS TEXT" in rich_content, "Observations not in rich_content"
-    assert "display: flex" in rich_content, "Missing 2-column layout CSS"
+    # ✅ Verify HTML preserved (not stripped)
+    element_3 = content["element_3"]
+    element_2 = content["element_2"]
 
-    print(f"\n✅ Rich Content Structure:")
-    print(f"   - Contains chart HTML: Yes")
-    print(f"   - Contains observations: Yes")
-    print(f"   - Uses 2-column layout: Yes")
-    print(f"   - Total HTML length: {len(rich_content)} chars")
+    assert "MOCK CHART HTML" in element_3, "Chart HTML missing"
+    assert "width: 1260px" in element_3, "Chart dimensions missing"
 
-    print("\n✅ TEST 3 PASSED: ContentTransformer correctly combines 2-field response")
+    assert "<h3>Key Insights</h3>" in element_2, "Observations heading HTML missing"
+    assert "<p>MOCK OBSERVATIONS TEXT</p>" in element_2, "Observations paragraph HTML missing"
+    assert "background: #f8f9fa" in element_2, "Observations styling missing"
+
+    print(f"\n✅ L02 Structure Verified:")
+    print(f"   - Layout: L02 (not L25)")
+    print(f"   - element_3 HTML preserved: {len(element_3)} chars")
+    print(f"   - element_2 HTML preserved: {len(element_2)} chars")
+    print(f"   - HTML tags NOT stripped")
+    print(f"   - Separate fields (not combined into rich_content)")
+
+    print("\n✅ TEST 3 PASSED: ContentTransformer creates L02 structure with HTML passthrough")
     return True
 
 
