@@ -1348,6 +1348,370 @@ export default DirectorChat;
 
 ---
 
+## Download Integration (PDF & PPTX)
+
+### Overview
+
+Director v3.4 provides `presentation_id` in all presentation responses, enabling **direct frontend integration** with the Layout Service download API for PDF and PowerPoint exports.
+
+**Architecture**: Frontend → Layout Service (Direct)
+- ✅ No need to route through Director
+- ✅ Faster downloads (fewer hops)
+- ✅ Simple REST API calls
+
+### When `presentation_id` is Available
+
+The `presentation_id` field is included in all presentation delivery stages:
+
+| Stage | Message Type | Response Field |
+|-------|--------------|----------------|
+| **Stage 4** (Strawman Preview) | `PresentationStrawman` object | `strawman.preview_presentation_id` |
+| **Stage 5** (Refinement) | `presentation_url` | `payload.presentation_id` |
+| **Stage 6** (Final with Content) | `presentation_url` | `payload.presentation_id` |
+
+### Stage 4 Response Example
+
+After strawman generation, Director returns:
+
+```json
+{
+  "type": "PresentationStrawman",
+  "main_title": "AI in Healthcare",
+  "slides": [...],
+  "preview_url": "https://layout-service/p/550e8400-e29b-41d4-a716-446655440000",
+  "preview_presentation_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Frontend Action**:
+```javascript
+// Extract presentation_id from strawman
+const presentationId = strawman.preview_presentation_id;
+
+// Store for download buttons
+setPresentationId(presentationId);
+```
+
+### Stage 5 Response Example
+
+After refinement:
+
+```json
+{
+  "message_id": "msg_jkl012",
+  "type": "presentation_url",
+  "payload": {
+    "url": "https://layout-service/p/550e8400-e29b-41d4-a716-446655440000",
+    "presentation_id": "550e8400-e29b-41d4-a716-446655440000",
+    "slide_count": 10,
+    "message": "Your refined presentation is ready!"
+  }
+}
+```
+
+### Stage 6 Response Example
+
+Final presentation with generated content:
+
+```json
+{
+  "message_id": "msg_xyz789",
+  "type": "presentation_url",
+  "payload": {
+    "url": "https://layout-service/p/660e8400-e29b-41d4-a716-446655440001",
+    "presentation_id": "660e8400-e29b-41d4-a716-446655440001",
+    "slide_count": 12,
+    "content_generated": true,
+    "message": "Your presentation with generated content is ready!"
+  }
+}
+```
+
+---
+
+### Layout Service Download API
+
+Once you have the `presentation_id`, call the Layout Service download endpoints **directly**.
+
+**Base URL**: `https://layout-service.up.railway.app` (or your deployment URL)
+
+#### Download as PDF
+
+**Endpoint**: `GET /api/presentations/{presentation_id}/download/pdf`
+
+**Query Parameters**:
+- `landscape` (boolean, default: `true`) - Use landscape orientation
+- `print_background` (boolean, default: `true`) - Include background graphics
+- `quality` (string, default: `"high"`) - Quality level: `"high"`, `"medium"`, or `"low"`
+
+**Response**: Binary PDF file download
+
+**Example**:
+```javascript
+// High quality PDF
+const pdfUrl = `https://layout-service/api/presentations/${presentationId}/download/pdf?quality=high`;
+
+// Download programmatically
+fetch(pdfUrl)
+  .then(response => response.blob())
+  .then(blob => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'presentation.pdf';
+    a.click();
+  });
+
+// Or open in new tab (triggers download)
+window.open(pdfUrl, '_blank');
+```
+
+#### Download as PPTX
+
+**Endpoint**: `GET /api/presentations/{presentation_id}/download/pptx`
+
+**Query Parameters**:
+- `aspect_ratio` (string, default: `"16:9"`) - Slide aspect ratio: `"16:9"` or `"4:3"`
+- `quality` (string, default: `"high"`) - Image quality: `"high"`, `"medium"`, or `"low"`
+
+**Response**: Binary PPTX file download
+
+**Example**:
+```javascript
+// High quality PPTX, 16:9 aspect ratio
+const pptxUrl = `https://layout-service/api/presentations/${presentationId}/download/pptx?quality=high&aspect_ratio=16:9`;
+
+// Download programmatically
+fetch(pptxUrl)
+  .then(response => response.blob())
+  .then(blob => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'presentation.pptx';
+    a.click();
+  });
+
+// Or open in new tab (triggers download)
+window.open(pptxUrl, '_blank');
+```
+
+---
+
+### Frontend Implementation
+
+#### React Component Example
+
+```jsx
+function PresentationDownloads({ presentationId }) {
+  const layoutServiceUrl = 'https://layout-service.up.railway.app';
+
+  const downloadPDF = (quality = 'high') => {
+    const url = `${layoutServiceUrl}/api/presentations/${presentationId}/download/pdf?quality=${quality}`;
+    window.open(url, '_blank');
+  };
+
+  const downloadPPTX = (quality = 'high', aspectRatio = '16:9') => {
+    const url = `${layoutServiceUrl}/api/presentations/${presentationId}/download/pptx?quality=${quality}&aspect_ratio=${aspectRatio}`;
+    window.open(url, '_blank');
+  };
+
+  return (
+    <div className="download-actions">
+      <h3>Download Presentation</h3>
+
+      <div className="download-buttons">
+        <button onClick={() => downloadPDF('high')}>
+          📄 Download PDF (High Quality)
+        </button>
+
+        <button onClick={() => downloadPPTX('high', '16:9')}>
+          📊 Download PowerPoint (16:9)
+        </button>
+      </div>
+
+      <div className="download-options">
+        <details>
+          <summary>More Options</summary>
+
+          <h4>PDF Options</h4>
+          <button onClick={() => downloadPDF('medium')}>Medium Quality</button>
+          <button onClick={() => downloadPDF('low')}>Low Quality (Fast)</button>
+
+          <h4>PowerPoint Options</h4>
+          <button onClick={() => downloadPPTX('high', '4:3')}>PPTX (4:3 Classic)</button>
+          <button onClick={() => downloadPPTX('medium', '16:9')}>PPTX (Medium Quality)</button>
+        </details>
+      </div>
+    </div>
+  );
+}
+```
+
+#### Vanilla JavaScript Example
+
+```javascript
+// Store presentation_id when received from Director
+let currentPresentationId = null;
+
+// Handle presentation_url message
+function handlePresentationURL(message) {
+  const { url, presentation_id, slide_count } = message.payload;
+
+  // Store for downloads
+  currentPresentationId = presentation_id;
+
+  // Show download buttons
+  showDownloadButtons(true);
+
+  // Load presentation
+  document.getElementById('presentation-iframe').src = url;
+}
+
+// Download functions
+function downloadPDF() {
+  if (!currentPresentationId) {
+    alert('No presentation available to download');
+    return;
+  }
+
+  const url = `https://layout-service/api/presentations/${currentPresentationId}/download/pdf?quality=high`;
+  window.open(url, '_blank');
+}
+
+function downloadPPTX() {
+  if (!currentPresentationId) {
+    alert('No presentation available to download');
+    return;
+  }
+
+  const url = `https://layout-service/api/presentations/${currentPresentationId}/download/pptx?quality=high&aspect_ratio=16:9`;
+  window.open(url, '_blank');
+}
+
+// Show/hide download buttons
+function showDownloadButtons(show) {
+  const buttons = document.getElementById('download-buttons');
+  buttons.style.display = show ? 'block' : 'none';
+}
+```
+
+#### HTML Template
+
+```html
+<!-- Download Section (initially hidden) -->
+<div id="download-buttons" style="display: none;">
+  <h3>Download Options</h3>
+
+  <button onclick="downloadPDF()" class="btn-download">
+    📄 Download as PDF
+  </button>
+
+  <button onclick="downloadPPTX()" class="btn-download">
+    📊 Download as PowerPoint
+  </button>
+</div>
+```
+
+---
+
+### Quality Settings Reference
+
+#### PDF Quality
+
+| Quality | Resolution | File Size | Use Case |
+|---------|-----------|-----------|----------|
+| `high` | 1920×1080 | ~5-8MB | Final deliverables, printing |
+| `medium` | 1440×810 | ~3-5MB | Quick reviews, email sharing |
+| `low` | 960×540 | ~1-2MB | Draft versions, fast downloads |
+
+#### PPTX Quality
+
+| Quality | Resolution | File Size | Use Case |
+|---------|-----------|-----------|----------|
+| `high` | 1920×1080 | ~3-5MB | Final deliverables |
+| `medium` | 1440×810 | ~2-3MB | Email-friendly |
+| `low` | 960×540 | ~1-2MB | Quick sharing |
+
+#### Aspect Ratio
+
+| Aspect Ratio | Dimensions | Use Case |
+|--------------|-----------|----------|
+| `16:9` | 10" × 5.625" | Modern presentations (recommended) |
+| `4:3` | 10" × 7.5" | Legacy/traditional format |
+
+---
+
+### Best Practices
+
+1. **Store presentation_id**: Extract and store `presentation_id` from any stage response for later downloads
+
+2. **Show download buttons conditionally**: Only enable downloads after `presentation_url` received
+
+3. **Default to high quality**: Use `quality=high` for best results unless file size is a concern
+
+4. **Handle download errors**: Wrap download calls in try-catch for network error handling
+
+5. **Loading states**: Show spinner while download is preparing (can take 5-10 seconds for large presentations)
+
+6. **User feedback**: Display toast/notification when download starts
+
+---
+
+### Error Handling
+
+```javascript
+async function downloadPDF(quality = 'high') {
+  if (!currentPresentationId) {
+    showError('No presentation available');
+    return;
+  }
+
+  const url = `${layoutServiceUrl}/api/presentations/${currentPresentationId}/download/pdf?quality=${quality}`;
+
+  try {
+    showLoading('Preparing PDF download...');
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = 'presentation.pdf';
+    a.click();
+
+    window.URL.revokeObjectURL(downloadUrl);
+    hideLoading();
+    showSuccess('PDF downloaded successfully!');
+
+  } catch (error) {
+    hideLoading();
+    showError(`Download failed: ${error.message}`);
+    console.error('PDF download error:', error);
+  }
+}
+```
+
+---
+
+### Summary
+
+**Key Points**:
+1. ✅ `presentation_id` is available in **all stages** (4, 5, 6)
+2. ✅ Call Layout Service download API **directly** (no Director routing)
+3. ✅ Two formats: **PDF** and **PPTX** (PowerPoint)
+4. ✅ Three quality levels: **high**, **medium**, **low**
+5. ✅ Two aspect ratios: **16:9** (modern), **4:3** (classic)
+6. ✅ Downloads trigger automatically via `window.open()` or programmatic fetch
+
+---
+
 ## Summary
 
 ### Quick Reference

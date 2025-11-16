@@ -115,6 +115,24 @@ class Settings(BaseSettings):
     MAX_VERTEX_RETRIES: int = Field(5, env="MAX_VERTEX_RETRIES")  # Max retry attempts for 429 errors
     VERTEX_RETRY_BASE_DELAY: int = Field(2, env="VERTEX_RETRY_BASE_DELAY")  # Base delay (exponential backoff)
 
+    # v3.4: Illustrator Service Integration (Stage 6 - Visualization Generation)
+    # Handles pyramid and future data visualizations (funnel, SWOT, BCG matrix, etc.)
+    ILLUSTRATOR_SERVICE_ENABLED: bool = Field(True, env="ILLUSTRATOR_SERVICE_ENABLED")
+    ILLUSTRATOR_SERVICE_URL: str = Field(
+        "http://localhost:8000",  # Local development (Illustrator v1.0)
+        env="ILLUSTRATOR_SERVICE_URL"
+    )
+    ILLUSTRATOR_SERVICE_TIMEOUT: int = Field(60, env="ILLUSTRATOR_SERVICE_TIMEOUT")  # Pyramid generation ~4s
+
+    # v3.4: Analytics Service Integration (Stage 6 - Chart Generation)
+    # Handles L01, L02, L03 analytics layouts with charts + AI observations
+    ANALYTICS_SERVICE_ENABLED: bool = Field(True, env="ANALYTICS_SERVICE_ENABLED")
+    ANALYTICS_SERVICE_URL: str = Field(
+        "https://analytics-v30-production.up.railway.app",  # Railway production
+        env="ANALYTICS_SERVICE_URL"
+    )
+    ANALYTICS_SERVICE_TIMEOUT: int = Field(30, env="ANALYTICS_SERVICE_TIMEOUT")  # Chart generation ~3s
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

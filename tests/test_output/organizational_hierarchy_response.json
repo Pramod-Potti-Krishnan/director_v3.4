@@ -1,0 +1,85 @@
+{
+  "html_length": 10037,
+  "response_keys": [
+    "success",
+    "html",
+    "metadata",
+    "generated_content",
+    "character_counts",
+    "validation",
+    "generation_time_ms",
+    "presentation_id",
+    "slide_id",
+    "slide_number"
+  ],
+  "generated_content": {
+    "level_4_label": "Future Growth",
+    "level_4_description": "Drive <strong>sustainable innovation</strong> and market dominance.",
+    "level_3_label": "Strategic Department Alignment",
+    "level_3_description": "Align departmental goals with <strong>overall strategy</strong>.",
+    "level_2_label": "Effective Team Leadership",
+    "level_2_description": "Empower teams through clear <strong>management direction</strong>.",
+    "level_1_label": "Operational Excellence Foundation",
+    "level_1_description": "Ensure seamless <strong>daily execution</strong> and efficient processes."
+  },
+  "validation": {
+    "valid": false,
+    "violations": [
+      {
+        "field": "level_3_label",
+        "actual_length": 30,
+        "min_required": 12,
+        "max_required": 20,
+        "status": "over",
+        "text": "Strategic Department Alignment"
+      },
+      {
+        "field": "level_3_description",
+        "actual_length": 47,
+        "min_required": 50,
+        "max_required": 60,
+        "status": "under",
+        "text": "Align departmental goals with <strong>overall stra..."
+      },
+      {
+        "field": "level_2_label",
+        "actual_length": 25,
+        "min_required": 12,
+        "max_required": 20,
+        "status": "over",
+        "text": "Effective Team Leadership"
+      },
+      {
+        "field": "level_2_description",
+        "actual_length": 49,
+        "min_required": 50,
+        "max_required": 60,
+        "status": "under",
+        "text": "Empower teams through clear <strong>management dir..."
+      },
+      {
+        "field": "level_1_label",
+        "actual_length": 33,
+        "min_required": 12,
+        "max_required": 20,
+        "status": "over",
+        "text": "Operational Excellence Foundation"
+      }
+    ]
+  },
+  "metadata": {
+    "num_levels": 4,
+    "template_file": "4.html",
+    "theme": "professional",
+    "size": "medium",
+    "topic": "Our Organizational Structure",
+    "generation_time_ms": 1998,
+    "attempts": 3,
+    "model": "gemini-2.5-flash-lite",
+    "usage": {
+      "prompt_token_count": 656,
+      "candidates_token_count": 140,
+      "total_token_count": 796
+    }
+  }
+}

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        .pyramid-container {
+            width: 100%;
+            height: 100%;
+            max-width: 1800px;
+            max-height: 720px;
+            display: flex;
+            flex-direction: column;
+            padding: 25px 60px;
+            font-family: Arial, sans-serif;
+            gap: 20px;  /* Increased gap between pyramid and details box */
+        }
+
+        .pyramid-wrapper {
+            width: 100%;
+            flex: 0 0 65%;  /* Top section takes 65% of height (less space for details) */
+            display: flex;
+            align-items: center;
+            gap: 60px;
+        }
+
+        .horizontal-line {
+            width: 100%;
+            height: 2px;
+            background: #cbd5e1;  /* Gray line */
+        }
+
+        .details-box {
+            width: 100%;
+            background: transparent;  /* Transparent background */
+            border-radius: 8px;
+            padding: 36px 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .details-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 10px;
+            padding: 0 40px;
+        }
+
+        .details-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #475569;
+            padding: 0 40px;
+        }
+
+        .pyramid-visual {
+            flex: 0 0 45%;  /* 45% of width for pyramid visual */
+            height: 60%;    /* 60% of pyramid-wrapper height for 4-stage */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 6.5px;     /* Gap reduced by half (was 13px) */
+        }
+
+        .pyramid-level {
+            width: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pyramid-shape {
+            /* Height: h = 54px for trapezoids, h_triangle = 81px for triangle */
+            height: 54px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .pyramid-level:hover .pyramid-shape {
+            filter: brightness(1.1);
+            transform: scale(1.02);
+        }
+
+        /* MATHEMATICALLY CORRECT TAPER WITH TRIANGLE CAP (2× STEEPER):
+           H_total = 281px, W_total = 100% (base), N = 4
+           R_g = 0.25, R_t = 1.5
+           h = 54px, g = 13px, h_triangle = 81px
+           C = 0.356 (100% / 281px - proper steep pyramid)
+           ΔW_trapezoid = 19.2%, ΔW_gap = 4.63%
+        */
+
+        /* Level 1 (Bottom Trapezoid): B1=100%, T1=80.8% */
+        .pyramid-level:nth-child(4) .pyramid-shape {
+            width: 100%;
+            clip-path: polygon(9.6% 0%, 90.4% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 2 (Trapezoid): B2=76.17%, T2=56.97% */
+        .pyramid-level:nth-child(3) .pyramid-shape {
+            width: 76.17%;
+            clip-path: polygon(12.6% 0%, 87.4% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 3 (Trapezoid): B3=52.34%, T3=33.14% */
+        .pyramid-level:nth-child(2) .pyramid-shape {
+            width: 52.34%;
+            clip-path: polygon(18.4% 0%, 81.6% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 4 (Top TRIANGLE): B4=28.51%, T4=0% (point), Height=81px (1.5x) */
+        .pyramid-level:nth-child(1) .pyramid-shape {
+            width: 28.51%;
+            height: 81px;  /* Triangle is 1.5× regular trapezoid height */
+            clip-path: polygon(50% 0%, 100% 100%, 0% 100%);  /* Perfect triangle */
+        }
+
+        /* MULTI-COLOR palette */
+        .level-4 .pyramid-shape { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }  /* Amber */
+        .level-3 .pyramid-shape { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }  /* Purple */
+        .level-2 .pyramid-shape { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }  /* Blue */
+        .level-1 .pyramid-shape { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }  /* Green */
+
+        .level-number {
+            color: white;
+            font-size: 48px;
+            font-weight: 900;
+            margin-top: 0;
+        }
+
+        .level-label {
+            color: white;
+            font-size: 22px;
+            font-weight: 600;
+            text-align: center;
+            padding: 0 20px;
+            margin-top: auto;
+        }
+
+        .connector-line {
+            position: absolute;
+            right: -35px;
+            top: 50%;
+            width: 30px;
+            height: 2px;
+            background: #cbd5e1;
+            transform: translateY(-50%);
+        }
+
+        .descriptions-column {
+            flex: 0 0 41%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 6.5px;  /* Match pyramid gap */
+        }
+
+        .description-item {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            height: 54px;  /* Match trapezoid height for alignment */
+        }
+
+        .description-number {
+            font-size: 72px;
+            font-weight: 900;
+            min-width: 85px;
+            text-align: center;
+        }
+
+        /* MATCH description number colors to NUMBER VALUE (not position) */
+        /* Top to bottom: 4(orange), 3(purple), 2(blue), 1(green) */
+        /* Higher specificity to override viewer CSS */
+        .pyramid-container .descriptions-column .description-item:nth-child(1) > .description-number { color: #f59e0b !important; opacity: 1.0; }  /* 4 - Orange */
+        .pyramid-container .descriptions-column .description-item:nth-child(2) > .description-number { color: #8b5cf6 !important; opacity: 1.0; }  /* 3 - Purple */
+        .pyramid-container .descriptions-column .description-item:nth-child(3) > .description-number { color: #3b82f6 !important; opacity: 1.0; }  /* 2 - Blue */
+        .pyramid-container .descriptions-column .description-item:nth-child(4) > .description-number { color: #10b981 !important; opacity: 1.0; }  /* 1 - Green */
+
+        .description-text {
+            flex: 1;
+            font-size: 16px;
+            line-height: 1.6;
+            color: #475569;
+        }
+    </style>
+</head>
+<body>
+    <div class="pyramid-container">
+        <div class="pyramid-wrapper">
+            <!-- Pyramid Visual (Left Side) - TOP TO BOTTOM -->
+            <div class="pyramid-visual">
+                <!-- Level 4 (Top - Narrowest) -->
+                <div class="pyramid-level level-4">
+                    <div class="pyramid-shape">
+                        <div class="level-number">4</div>
+                        <div class="level-label">Future Growth</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 3 -->
+                <div class="pyramid-level level-3">
+                    <div class="pyramid-shape">
+                        <div class="level-number">3</div>
+                        <div class="level-label">Strategic Department Alignment</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 2 -->
+                <div class="pyramid-level level-2">
+                    <div class="pyramid-shape">
+                        <div class="level-number">2</div>
+                        <div class="level-label">Effective Team Leadership</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 1 (Bottom - Widest) -->
+                <div class="pyramid-level level-1">
+                    <div class="pyramid-shape">
+                        <div class="level-number">1</div>
+                        <div class="level-label">Operational Excellence Foundation</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Descriptions (Right Side) - TOP TO BOTTOM -->
+            <div class="descriptions-column">
+                <div class="description-item">
+                    <div class="description-number" style="color: #f59e0b !important;">4</div>
+                    <div class="description-text">Drive <strong>sustainable innovation</strong> and market dominance.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number" style="color: #8b5cf6 !important;">3</div>
+                    <div class="description-text">Align departmental goals with <strong>overall strategy</strong>.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number" style="color: #3b82f6 !important;">2</div>
+                    <div class="description-text">Empower teams through clear <strong>management direction</strong>.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number" style="color: #10b981 !important;">1</div>
+                    <div class="description-text">Ensure seamless <strong>daily execution</strong> and efficient processes.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Horizontal separator line -->
+        <div class="horizontal-line"></div>
+
+        <!-- Details Box (Bottom Section) - Text box with padding -->
+        <div class="details-box">
+            <div class="details-title">{overview_heading}</div>
+            <div class="details-text">{overview_text}</div>
+        </div>
+    </div>
+</body>
+</html>

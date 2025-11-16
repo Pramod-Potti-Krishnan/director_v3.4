@@ -1,0 +1,150 @@
+{
+  "last_updated": "2025-11-10T01:50:07.401500",
+  "variant_usage": {
+    "variant_1": 6,
+    "variant_2": 6,
+    "variant_3": 6,
+    "variant_4": 6,
+    "variant_0": 6
+  },
+  "classification_usage": {},
+  "diversity_scores": [
+    75,
+    75,
+    75
+  ],
+  "presentations": [
+    {
+      "session_id": "test_session_001",
+      "timestamp": "2025-11-10T01:49:08.469393",
+      "stage": "GENERATE_STRAWMAN",
+      "metadata": {
+        "title": "Test Presentation",
+        "slide_count": 10,
+        "target_audience": "Business",
+        "duration": 15
+      },
+      "variants": {
+        "used": [
+          "variant_1",
+          "variant_2",
+          "variant_3",
+          "variant_4",
+          "variant_0",
+          "variant_1",
+          "variant_2",
+          "variant_3",
+          "variant_4",
+          "variant_0"
+        ],
+        "unique_count": 5,
+        "distribution": {
+          "variant_1": 2,
+          "variant_2": 2,
+          "variant_3": 2,
+          "variant_4": 2,
+          "variant_0": 2
+        }
+      },
+      "classifications": {
+        "used": [],
+        "unique_count": 0,
+        "distribution": {}
+      },
+      "diversity": {
+        "diversity_score": 75,
+        "unique_variants": 5,
+        "unique_classifications": 3
+      },
+      "semantic_groups": {}
+    },
+    {
+      "session_id": "test_session_001",
+      "timestamp": "2025-11-10T01:49:36.092036",
+      "stage": "GENERATE_STRAWMAN",
+      "metadata": {
+        "title": "Test Presentation",
+        "slide_count": 10,
+        "target_audience": "Business",
+        "duration": 15
+      },
+      "variants": {
+        "used": [
+          "variant_1",
+          "variant_2",
+          "variant_3",
+          "variant_4",
+          "variant_0",
+          "variant_1",
+          "variant_2",
+          "variant_3",
+          "variant_4",
+          "variant_0"
+        ],
+        "unique_count": 5,
+        "distribution": {
+          "variant_1": 2,
+          "variant_2": 2,
+          "variant_3": 2,
+          "variant_4": 2,
+          "variant_0": 2
+        }
+      },
+      "classifications": {
+        "used": [],
+        "unique_count": 0,
+        "distribution": {}
+      },
+      "diversity": {
+        "diversity_score": 75,
+        "unique_variants": 5,
+        "unique_classifications": 3
+      },
+      "semantic_groups": {}
+    },
+    {
+      "session_id": "test_session_001",
+      "timestamp": "2025-11-10T01:50:07.400591",
+      "stage": "GENERATE_STRAWMAN",
+      "metadata": {
+        "title": "Test Presentation",
+        "slide_count": 10,
+        "target_audience": "Business",
+        "duration": 15
+      },
+      "variants": {
+        "used": [
+          "variant_1",
+          "variant_2",
+          "variant_3",
+          "variant_4",
+          "variant_0",
+          "variant_1",
+          "variant_2",
+          "variant_3",
+          "variant_4",
+          "variant_0"
+        ],
+        "unique_count": 5,
+        "distribution": {
+          "variant_1": 2,
+          "variant_2": 2,
+          "variant_3": 2,
+          "variant_4": 2,
+          "variant_0": 2
+        }
+      },
+      "classifications": {
+        "used": [],
+        "unique_count": 0,
+        "distribution": {}
+      },
+      "diversity": {
+        "diversity_score": 75,
+        "unique_variants": 5,
+        "unique_classifications": 3
+      },
+      "semantic_groups": {}
+    }
+  ]
+}

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        .pyramid-container {
+            width: 100%;
+            height: 100%;
+            max-width: 1800px;
+            max-height: 720px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 45px;  /* No top/bottom padding */
+            font-family: Arial, sans-serif;
+            overflow: hidden;  /* Prevent scrollbar */
+        }
+
+        .pyramid-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 45px;
+        }
+
+        .pyramid-visual {
+            flex: 0 0 45%;  /* 45% of width for pyramid visual */
+            height: 80%;    /* 80% of container height */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 9.5px;     /* Gap reduced by half (was 19px) */
+        }
+
+        .pyramid-level {
+            width: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pyramid-shape {
+            /* Height: h = 74px for trapezoids, h_triangle = 111px for triangle */
+            height: 74px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .pyramid-level:hover .pyramid-shape {
+            filter: brightness(1.1);
+            transform: scale(1.02);
+        }
+
+        /* MATHEMATICALLY CORRECT TAPER WITH TRIANGLE CAP (2× STEEPER):
+           H_total = 576px, W_total = 100% (base), N = 6
+           R_g = 0.25, R_t = 1.5
+           h = 74px, g = 19px, h_triangle = 111px
+           C = 0.174 (100% / 576px - proper steep pyramid)
+           ΔW_trapezoid = 12.88%, ΔW_gap = 3.31%
+        */
+
+        /* Level 1 (Bottom Trapezoid): B1=100%, T1=87.12% */
+        .pyramid-level:nth-child(6) .pyramid-shape {
+            width: 100%;
+            clip-path: polygon(6.44% 0%, 93.56% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 2 (Trapezoid): B2=83.81%, T2=70.93% */
+        .pyramid-level:nth-child(5) .pyramid-shape {
+            width: 83.81%;
+            clip-path: polygon(7.68% 0%, 92.32% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 3 (Trapezoid): B3=67.62%, T3=54.74% */
+        .pyramid-level:nth-child(4) .pyramid-shape {
+            width: 67.62%;
+            clip-path: polygon(9.53% 0%, 90.47% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 4 (Trapezoid): B4=51.43%, T4=38.55% */
+        .pyramid-level:nth-child(3) .pyramid-shape {
+            width: 51.43%;
+            clip-path: polygon(12.53% 0%, 87.47% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 5 (Trapezoid): B5=35.24%, T5=22.36% */
+        .pyramid-level:nth-child(2) .pyramid-shape {
+            width: 35.24%;
+            clip-path: polygon(18.28% 0%, 81.72% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 6 (Top TRIANGLE): B6=19.05%, T6=0% (point), Height=111px (1.5x) */
+        .pyramid-level:nth-child(1) .pyramid-shape {
+            width: 19.05%;
+            height: 111px;  /* Triangle is 1.5× regular trapezoid height */
+            clip-path: polygon(50% 0%, 100% 100%, 0% 100%);  /* Perfect triangle */
+        }
+
+        /* MULTI-COLOR palette for different sections */
+        .level-6 .pyramid-shape { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }  /* Red */
+        .level-5 .pyramid-shape { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }  /* Pink */
+        .level-4 .pyramid-shape { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }  /* Amber */
+        .level-3 .pyramid-shape { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }  /* Purple */
+        .level-2 .pyramid-shape { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }  /* Blue */
+        .level-1 .pyramid-shape { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }  /* Green */
+
+        .level-number {
+            color: white;
+            font-size: 28px;
+            font-weight: 900;
+            margin-top: 0;  /* Aligned to top with padding */
+        }
+
+        .level-label {
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            padding: 0 12px;
+            margin-top: auto;  /* Push to bottom with padding */
+        }
+
+        .connector-line {
+            position: absolute;
+            right: -28px;
+            top: 50%;
+            width: 23px;
+            height: 2px;
+            background: #cbd5e1;
+            transform: translateY(-50%);
+        }
+
+        .descriptions-column {
+            flex: 0 0 55%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 9.5px;  /* Match pyramid gap */
+        }
+
+        .description-item {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            height: 74px;  /* Match trapezoid height for alignment */
+        }
+
+        .description-number {
+            font-size: 52px;
+            font-weight: 900;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        /* MATCH description number colors to trapezoid colors (SOLID, not transparent) */
+        .description-item:nth-child(1) .description-number { color: #ef4444; opacity: 1.0; }  /* Red - solid */
+        .description-item:nth-child(2) .description-number { color: #ec4899; opacity: 1.0; }  /* Pink - solid */
+        .description-item:nth-child(3) .description-number { color: #f59e0b; opacity: 1.0; }  /* Amber - solid */
+        .description-item:nth-child(4) .description-number { color: #8b5cf6; opacity: 1.0; }  /* Purple - solid */
+        .description-item:nth-child(5) .description-number { color: #3b82f6; opacity: 1.0; }  /* Blue - solid */
+        .description-item:nth-child(6) .description-number { color: #10b981; opacity: 1.0; }  /* Green - solid */
+
+        .description-text {
+            flex: 1;
+            font-size: 12px;
+            line-height: 1.45;
+            color: #475569;
+        }
+    </style>
+</head>
+<body>
+    <div class="pyramid-container">
+        <div class="pyramid-wrapper">
+            <!-- Pyramid Visual (Left Side) - TOP TO BOTTOM -->
+            <div class="pyramid-visual">
+                <!-- Level 6 (Top - Narrowest) -->
+                <div class="pyramid-level level-6">
+                    <div class="pyramid-shape">
+                        <div class="level-number">6</div>
+                        <div class="level-label">Tech Guru</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 5 -->
+                <div class="pyramid-level level-5">
+                    <div class="pyramid-shape">
+                        <div class="level-number">5</div>
+                        <div class="level-label">Principal Engineer</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 4 -->
+                <div class="pyramid-level level-4">
+                    <div class="pyramid-shape">
+                        <div class="level-number">4</div>
+                        <div class="level-label">Senior Staff Engineer</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 3 -->
+                <div class="pyramid-level level-3">
+                    <div class="pyramid-shape">
+                        <div class="level-number">3</div>
+                        <div class="level-label">Senior Engineer</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 2 -->
+                <div class="pyramid-level level-2">
+                    <div class="pyramid-shape">
+                        <div class="level-number">2</div>
+                        <div class="level-label">Mid-Level Engineer</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 1 (Bottom - Widest) -->
+                <div class="pyramid-level level-1">
+                    <div class="pyramid-shape">
+                        <div class="level-number">1</div>
+                        <div class="level-label">Junior Engineer</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Descriptions (Right Side) - TOP TO BOTTOM -->
+            <div class="descriptions-column">
+                <div class="description-item">
+                    <div class="description-number">6</div>
+                    <div class="description-text">Shape <strong>future tech</strong>, guide innovation, define industry.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number">5</div>
+                    <div class="description-text">Drive <strong>technical strategy</strong>, mentor teams, solve complex issues.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number">4</div>
+                    <div class="description-text">Lead <strong>major initiatives</strong>, influence architecture, elevate practices.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number">3</div>
+                    <div class="description-text">Own <strong>critical features</strong>, mentor juniors, ensure code quality.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number">2</div>
+                    <div class="description-text">Develop <strong>core components</strong>, contribute independently, learn best practices.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number">1</div>
+                    <div class="description-text">Build <strong>foundational skills</strong>, learn from seniors, tackle tasks.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

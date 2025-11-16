@@ -19,7 +19,7 @@ logger = setup_logger(__name__)
 
 class SlideTypeClassifier:
     """
-    Classifies slides into 13 taxonomy types.
+    Classifies slides into 14 taxonomy types.
 
     L29 Hero Types (3):
     - title_slide: First slide
@@ -37,6 +37,9 @@ class SlideTypeClassifier:
     - hybrid_1_2x2: Overview + 2x2 grid
     - asymmetric_8_4: Main + sidebar
     - single_column: Dense single-column (default)
+
+    Visualization Types (1):
+    - pyramid: Hierarchical pyramid visualization (Illustrator Service)
     """
 
     # Keywords for classification (v3.4-diversity: Expanded keyword sets)
@@ -52,6 +55,36 @@ class SlideTypeClassifier:
         "metric", "kpi", "statistic", "number", "figure", "data point",
         "performance indicator", "key metric", "dashboard", "scorecard",
         "trend arrow", "growth", "improvement", "quarterly metric"
+    }
+
+    # v3.4-pyramid: Pyramid visualization keywords (Illustrator Service)
+    PYRAMID_KEYWORDS = {
+        "pyramid", "hierarchical", "hierarchy", "organizational structure",
+        "levels", "tier", "tiers", "tiered", "layered", "layers",
+        "foundation to top", "base to peak", "top to bottom",
+        "organizational chart", "org chart", "reporting structure",
+        "escalation", "progression", "maslow", "food pyramid",
+        "pyramid structure", "pyramid model", "pyramid framework",
+        "from foundation", "building blocks", "level 1", "level 2",
+        "3 levels", "4 levels", "5 levels", "6 levels",
+        "three tiers", "four tiers", "five tiers", "six tiers"
+    }
+
+    # v3.4-analytics: Analytics/Chart visualization keywords (Analytics Service)
+    ANALYTICS_KEYWORDS = {
+        "chart", "graph", "analytics", "data visualization", "visualization",
+        "revenue", "sales", "growth", "performance", "metrics",
+        "quarterly", "monthly", "annual", "year-over-year", "yoy",
+        "market share", "pie chart", "donut chart", "bar chart", "line chart",
+        "scatter plot", "histogram", "trend", "trending", "time series",
+        "kpi", "key performance indicator", "metric dashboard", "scorecard",
+        "financial data", "business metrics", "operational metrics",
+        "comparison chart", "benchmark", "benchmarking",
+        "show data", "visualize data", "plot data", "display metrics",
+        "revenue over time", "quarterly comparison", "growth chart",
+        "Q1", "Q2", "Q3", "Q4", "fiscal year", "fy",
+        "percentage", "percent", "%", "increase", "decrease",
+        "target vs actual", "forecast vs actual", "budget vs actual"
     }
 
     MATRIX_KEYWORDS = {
@@ -180,25 +213,27 @@ class SlideTypeClassifier:
     @classmethod
     def _classify_content(cls, slide: Slide) -> str:
         """
-        Classify as L25 content type using 10-priority heuristics.
+        Classify as L25 content type using 12-priority heuristics.
 
         Priority Order:
         1. Quote → impact_quote
-        2. Metrics → metrics_grid
-        3. Matrix → matrix_2x2
-        4. Grid → grid_3x3
-        5. Table → styled_table
-        6. Comparison → bilateral_comparison
-        7. Sequential → sequential_3col
-        8. Hybrid → hybrid_1_2x2
-        9. Asymmetric → asymmetric_8_4
-        10. Default → single_column
+        2. Analytics → analytics (v3.4-analytics: Analytics Service - charts/graphs)
+        3. Metrics → metrics_grid (static KPI cards, not charts)
+        4. Pyramid → pyramid (v3.4-pyramid: Illustrator Service)
+        5. Matrix → matrix_2x2
+        6. Grid → grid_3x3
+        7. Table → styled_table
+        8. Comparison → bilateral_comparison
+        9. Sequential → sequential_3col
+        10. Hybrid → hybrid_1_2x2
+        11. Asymmetric → asymmetric_8_4
+        12. Default → single_column
 
         Args:
             slide: Slide object
 
         Returns:
-            L25 content type (one of 10 types)
+            Slide type (one of 13 types: 10 L25 + 2 visualizations + 1 default)
         """
         # Combine all text for analysis
         text_corpus = cls._build_text_corpus(slide)
@@ -207,41 +242,52 @@ class SlideTypeClassifier:
         if cls._contains_keywords(text_corpus, cls.QUOTE_KEYWORDS):
             return "impact_quote"
 
-        # Priority 2: Metrics detection
+        # Priority 2: Analytics/Chart detection (v3.4-analytics: Analytics Service)
+        # Detect data visualizations, charts, and analytics slides BEFORE metrics
+        # This prevents confusion between static metrics cards and dynamic charts
+        if cls._contains_keywords(text_corpus, cls.ANALYTICS_KEYWORDS):
+            return "analytics"
+
+        # Priority 3: Metrics detection (static KPI cards, not charts)
         if cls._contains_keywords(text_corpus, cls.METRICS_KEYWORDS):
             # Check for 3-card pattern (common for metrics)
             if "3" in text_corpus or "three" in text_corpus:
                 return "metrics_grid"
 
-        # Priority 3: Matrix detection
+        # Priority 4: Pyramid detection (v3.4-pyramid: Illustrator Service)
+        # Detect hierarchical/pyramid structures early (very specific pattern)
+        if cls._contains_keywords(text_corpus, cls.PYRAMID_KEYWORDS):
+            return "pyramid"
+
+        # Priority 5: Matrix detection
         if cls._contains_keywords(text_corpus, cls.MATRIX_KEYWORDS):
             return "matrix_2x2"
 
-        # Priority 4: Grid detection
+        # Priority 6: Grid detection
         if cls._contains_keywords(text_corpus, cls.GRID_KEYWORDS):
             return "grid_3x3"
 
-        # Priority 5: Table detection
+        # Priority 7: Table detection
         if slide.tables_needed or cls._contains_keywords(text_corpus, cls.TABLE_KEYWORDS):
             return "styled_table"
 
-        # Priority 6: Comparison detection
+        # Priority 8: Comparison detection
         if cls._contains_keywords(text_corpus, cls.COMPARISON_KEYWORDS):
             return "bilateral_comparison"
 
-        # Priority 7: Sequential detection
+        # Priority 9: Sequential detection
         if cls._contains_keywords(text_corpus, cls.SEQUENTIAL_KEYWORDS):
             return "sequential_3col"
 
-        # Priority 8: Hybrid detection
+        # Priority 10: Hybrid detection
         if cls._contains_keywords(text_corpus, cls.HYBRID_KEYWORDS):
             return "hybrid_1_2x2"
 
-        # Priority 9: Asymmetric detection
+        # Priority 11: Asymmetric detection
         if cls._contains_keywords(text_corpus, cls.ASYMMETRIC_KEYWORDS):
             return "asymmetric_8_4"
 
-        # Priority 10: Default to single_column
+        # Priority 12: Default to single_column
         # Used for dense, detailed content that doesn't fit other patterns
         return "single_column"
 
@@ -400,7 +446,7 @@ def classify_slide(slide: Slide, position: int, total_slides: int) -> str:
 
 # Example usage
 if __name__ == "__main__":
-    print("Slide Type Classifier")
+    print("Slide Type Classifier (v3.4-pyramid)")
     print("=" * 70)
     print("\nClassification Strategy:")
     print("  L29 Hero Types (3):")
@@ -410,12 +456,16 @@ if __name__ == "__main__":
     print("\n  L25 Content Types (10):")
     print("    Priority 1: impact_quote (quote keywords)")
     print("    Priority 2: metrics_grid (metric keywords)")
-    print("    Priority 3: matrix_2x2 (matrix keywords)")
-    print("    Priority 4: grid_3x3 (grid keywords)")
-    print("    Priority 5: styled_table (table keywords)")
-    print("    Priority 6: bilateral_comparison (comparison keywords)")
-    print("    Priority 7: sequential_3col (sequential keywords)")
-    print("    Priority 8: hybrid_1_2x2 (hybrid keywords)")
-    print("    Priority 9: asymmetric_8_4 (asymmetric keywords)")
-    print("    Priority 10: single_column (default)")
+    print("    Priority 3: pyramid (pyramid keywords) [v3.4-pyramid: Illustrator Service]")
+    print("    Priority 4: matrix_2x2 (matrix keywords)")
+    print("    Priority 5: grid_3x3 (grid keywords)")
+    print("    Priority 6: styled_table (table keywords)")
+    print("    Priority 7: bilateral_comparison (comparison keywords)")
+    print("    Priority 8: sequential_3col (sequential keywords)")
+    print("    Priority 9: hybrid_1_2x2 (hybrid keywords)")
+    print("    Priority 10: asymmetric_8_4 (asymmetric keywords)")
+    print("    Priority 11: single_column (default)")
+    print("\n  Visualization Types (1):")
+    print("    • pyramid: Hierarchical pyramid (Illustrator Service v1.0)")
     print("\n" + "=" * 70)
+    print(f"Total Slide Types: 14 (3 hero + 10 content + 1 visualization)")

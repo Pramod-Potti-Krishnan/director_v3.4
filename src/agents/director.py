@@ -136,6 +136,47 @@ class DirectorAgent:
         else:
             logger.info("Text Service integration disabled in settings")
 
+        # v3.4-pyramid: Initialize Illustrator Service client for Stage 6 (pyramid visualizations)
+        self.illustrator_service_enabled = getattr(settings, 'ILLUSTRATOR_SERVICE_ENABLED', True)
+        self.illustrator_client = None
+        if self.illustrator_service_enabled:
+            try:
+                from src.clients.illustrator_client import IllustratorClient
+                illustrator_service_url = getattr(settings, 'ILLUSTRATOR_SERVICE_URL', 'http://localhost:8000')
+                self.illustrator_client = IllustratorClient(
+                    base_url=illustrator_service_url,
+                    timeout=getattr(settings, 'ILLUSTRATOR_SERVICE_TIMEOUT', 60)
+                )
+                logger.info(f"Illustrator Service integration enabled: {illustrator_service_url}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Illustrator Service client: {e}")
+                logger.warning("Illustrator Service integration disabled, pyramid slides will fail")
+                self.illustrator_service_enabled = False
+                self.illustrator_client = None
+        else:
+            logger.info("Illustrator Service integration disabled in settings")
+
+        # v3.4-analytics: Initialize Analytics Service client for Stage 6 (chart visualizations)
+        self.analytics_service_enabled = getattr(settings, 'ANALYTICS_SERVICE_ENABLED', True)
+        self.analytics_client = None
+        if self.analytics_service_enabled:
+            try:
+                from src.clients.analytics_client import AnalyticsClient
+                analytics_service_url = getattr(settings, 'ANALYTICS_SERVICE_URL',
+                    'https://analytics-v30-production.up.railway.app')
+                self.analytics_client = AnalyticsClient(
+                    base_url=analytics_service_url,
+                    timeout=getattr(settings, 'ANALYTICS_SERVICE_TIMEOUT', 30)
+                )
+                logger.info(f"Analytics Service integration enabled: {analytics_service_url}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Analytics Service client: {e}")
+                logger.warning("Analytics Service integration disabled, analytics slides will fail")
+                self.analytics_service_enabled = False
+                self.analytics_client = None
+        else:
+            logger.info("Analytics Service integration disabled in settings")
+
         # v3.4-v1.2: Initialize variant catalog and selector for Text Service v1.2
         self.variant_catalog = None
         self.variant_selector = None
@@ -891,9 +932,13 @@ class DirectorAgent:
                     )
                     logger.info(f"✅ v1.2 Client initialized successfully")
 
-                    # Create v1.2 router
-                    router = ServiceRouterV1_2(v1_2_client)
-                    logger.info("✅ v1.2 Router initialized successfully")
+                    # v3.4-analytics: Create v1.2 router with multi-service support
+                    router = ServiceRouterV1_2(
+                        text_service_client=v1_2_client,
+                        illustrator_client=self.illustrator_client,
+                        analytics_client=self.analytics_client
+                    )
+                    logger.info("✅ v1.2 Router initialized successfully with multi-service support (Text/Illustrator/Analytics)")
 
                     # v3.4 FIX: Add diagnostic logging before Text Service call
                     print("="*80, flush=True)

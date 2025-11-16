@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        .pyramid-container {
+            width: 100%;
+            height: 100%;
+            max-width: 1800px;
+            max-height: 720px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 30px 50px;
+            font-family: Arial, sans-serif;
+        }
+
+        .pyramid-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 50px;
+        }
+
+        .pyramid-visual {
+            flex: 0 0 45%;  /* 45% of width for pyramid visual */
+            height: 80%;    /* 80% of container height */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 11px;      /* Gap reduced by half (was 22px) */
+        }
+
+        .pyramid-level {
+            width: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pyramid-shape {
+            /* Height: h = 89px for trapezoids, h_triangle = 133px for triangle */
+            height: 89px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .pyramid-level:hover .pyramid-shape {
+            filter: brightness(1.1);
+            transform: scale(1.02);
+        }
+
+        /* MATHEMATICALLY CORRECT TAPER WITH TRIANGLE CAP (2× STEEPER):
+           H_total = 576px, W_total = 100% (base), N = 5
+           R_g = 0.25, R_t = 1.5
+           h = 89px, g = 22px, h_triangle = 133px
+           C = 0.174 (100% / 576px - proper steep pyramid)
+           ΔW_trapezoid = 15.5%, ΔW_gap = 3.83%
+        */
+
+        /* Level 1 (Bottom Trapezoid): B1=100%, T1=84.5% */
+        .pyramid-level:nth-child(5) .pyramid-shape {
+            width: 100%;
+            clip-path: polygon(7.75% 0%, 92.25% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 2 (Trapezoid): B2=80.67%, T2=65.17% */
+        .pyramid-level:nth-child(4) .pyramid-shape {
+            width: 80.67%;
+            clip-path: polygon(9.6% 0%, 90.4% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 3 (Trapezoid): B3=61.34%, T3=45.84% */
+        .pyramid-level:nth-child(3) .pyramid-shape {
+            width: 61.34%;
+            clip-path: polygon(12.65% 0%, 87.35% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 4 (Trapezoid): B4=42.01%, T4=26.51% */
+        .pyramid-level:nth-child(2) .pyramid-shape {
+            width: 42.01%;
+            clip-path: polygon(18.45% 0%, 81.55% 0%, 100% 100%, 0% 100%);
+        }
+
+        /* Level 5 (Top TRIANGLE): B5=22.68%, T5=0% (point), Height=133px (1.5x) */
+        .pyramid-level:nth-child(1) .pyramid-shape {
+            width: 22.68%;
+            height: 133px;  /* Triangle is 1.5× regular trapezoid height */
+            clip-path: polygon(50% 0%, 100% 100%, 0% 100%);  /* Perfect triangle */
+        }
+
+        /* MULTI-COLOR palette for different sections */
+        .level-5 .pyramid-shape { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }  /* Pink */
+        .level-4 .pyramid-shape { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }  /* Amber */
+        .level-3 .pyramid-shape { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }  /* Purple */
+        .level-2 .pyramid-shape { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }  /* Blue */
+        .level-1 .pyramid-shape { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }  /* Green */
+
+        .level-number {
+            color: white;
+            font-size: 40px;
+            font-weight: 900;
+            margin-top: 0;  /* Aligned to top with padding */
+        }
+
+        .level-label {
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+            padding: 0 20px;
+            margin-top: auto;  /* Push to bottom with padding */
+        }
+
+        .connector-line {
+            position: absolute;
+            right: -30px;
+            top: 50%;
+            width: 25px;
+            height: 2px;
+            background: #cbd5e1;
+            transform: translateY(-50%);
+        }
+
+        .descriptions-column {
+            flex: 0 0 53%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 11px;  /* Match pyramid gap */
+        }
+
+        .description-item {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            height: 89px;  /* Match trapezoid height for alignment */
+        }
+
+        .description-number {
+            font-size: 64px;
+            font-weight: 900;
+            min-width: 75px;
+            text-align: center;
+        }
+
+        /* MATCH description number colors to NUMBER VALUE (not position) */
+        /* Top to bottom: 5(pink), 4(orange), 3(purple), 2(blue), 1(green) */
+        /* Higher specificity to override viewer CSS */
+        .pyramid-container .descriptions-column .description-item:nth-child(1) > .description-number { color: #ec4899 !important; opacity: 1.0; }  /* 5 - Pink */
+        .pyramid-container .descriptions-column .description-item:nth-child(2) > .description-number { color: #f59e0b !important; opacity: 1.0; }  /* 4 - Orange */
+        .pyramid-container .descriptions-column .description-item:nth-child(3) > .description-number { color: #8b5cf6 !important; opacity: 1.0; }  /* 3 - Purple */
+        .pyramid-container .descriptions-column .description-item:nth-child(4) > .description-number { color: #3b82f6 !important; opacity: 1.0; }  /* 2 - Blue */
+        .pyramid-container .descriptions-column .description-item:nth-child(5) > .description-number { color: #10b981 !important; opacity: 1.0; }  /* 1 - Green */
+
+        .description-text {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #475569;
+        }
+    </style>
+</head>
+<body>
+    <div class="pyramid-container">
+        <div class="pyramid-wrapper">
+            <!-- Pyramid Visual (Left Side) - TOP TO BOTTOM -->
+            <div class="pyramid-visual">
+                <!-- Level 5 (Top - Narrowest) -->
+                <div class="pyramid-level level-5">
+                    <div class="pyramid-shape">
+                        <div class="level-number">5</div>
+                        <div class="level-label">Chief Architect</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 4 -->
+                <div class="pyramid-level level-4">
+                    <div class="pyramid-shape">
+                        <div class="level-number">4</div>
+                        <div class="level-label">Principal Engineer</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 3 -->
+                <div class="pyramid-level level-3">
+                    <div class="pyramid-shape">
+                        <div class="level-number">3</div>
+                        <div class="level-label">Senior Engineer</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 2 -->
+                <div class="pyramid-level level-2">
+                    <div class="pyramid-shape">
+                        <div class="level-number">2</div>
+                        <div class="level-label">Mid-Level Engineer</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+
+                <!-- Level 1 (Bottom - Widest) -->
+                <div class="pyramid-level level-1">
+                    <div class="pyramid-shape">
+                        <div class="level-number">1</div>
+                        <div class="level-label">Junior Engineer</div>
+                        <div class="connector-line"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Descriptions (Right Side) - TOP TO BOTTOM -->
+            <div class="descriptions-column">
+                <div class="description-item">
+                    <div class="description-number" style="color: #ec4899 !important;">5</div>
+                    <div class="description-text">Define <strong>technical direction</strong>, shape future innovation.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number" style="color: #f59e0b !important;">4</div>
+                    <div class="description-text">Lead complex projects, mentor teams, drive <strong>strategic impact</strong>.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number" style="color: #8b5cf6 !important;">3</div>
+                    <div class="description-text">Own critical systems, deliver high-quality solutions, <strong>technical leadership</strong>.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number" style="color: #3b82f6 !important;">2</div>
+                    <div class="description-text">Develop features independently, contribute to design, <strong>problem-solving</strong>.</div>
+                </div>
+                <div class="description-item">
+                    <div class="description-number" style="color: #10b981 !important;">1</div>
+                    <div class="description-text">Learn systems, execute tasks, build <strong>foundational skills</strong>.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

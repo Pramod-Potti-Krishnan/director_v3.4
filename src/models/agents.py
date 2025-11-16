@@ -111,14 +111,17 @@ class Slide(BaseModel):
         "conclusion_slide"
     ]
 
-    # v3.4: 13-type taxonomy classification for specialized generators
+    # v3.4: 15-type taxonomy classification for specialized generators
+    # v3.4-pyramid: Extended to support Illustrator Service visualizations
+    # v3.4-analytics: Extended to support Analytics Service v3 charts
     slide_type_classification: Optional[str] = Field(
         default=None,
-        description="Classified slide type from 13-type taxonomy (3 hero + 10 content). "
+        description="Classified slide type from 15-type taxonomy (3 hero + 10 content + 2 visualizations). "
                     "Hero types: title_slide, section_divider, closing_slide. "
                     "Content types: bilateral_comparison, sequential_3col, impact_quote, metrics_grid, "
                     "matrix_2x2, grid_3x3, asymmetric_8_4, hybrid_1_2x2, single_column, styled_table. "
-                    "Used to route to specialized Text Service v1.1 endpoints."
+                    "Visualization types: pyramid (Illustrator Service), analytics (Analytics Service v3). "
+                    "Used to route to specialized Text Service v1.2, Illustrator Service, or Analytics Service endpoints."
     )
 
     # v3.4: Content generation guidance for specialized generators
@@ -126,6 +129,32 @@ class Slide(BaseModel):
         default=None,
         description="Semantic and structural guidance for content generation. "
                     "Provides context to specialized text generators about tone, density, emphasis, etc."
+    )
+
+    # v3.4-pyramid: Visualization configuration for Illustrator Service
+    visualization_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Configuration for visualization generation (Illustrator Service). "
+                    "For pyramid slides: {'num_levels': 3-6, 'target_points': ['Point 1', 'Point 2', ...], "
+                    "'topic': 'Pyramid Topic', 'tone': 'professional'}. "
+                    "Future: funnel, SWOT, BCG matrix configurations. "
+                    "Only populated when slide_type_classification is a visualization type (e.g., 'pyramid')."
+    )
+
+    # v3.4-analytics: Analytics/Chart configuration for Analytics Service v3
+    analytics_type: Optional[str] = Field(
+        default=None,
+        description="Type of analytics chart to generate. "
+                    "Supported types: revenue_over_time, quarterly_comparison, market_share, "
+                    "yoy_growth, kpi_metrics. "
+                    "Only populated when slide_type_classification is 'analytics'."
+    )
+    analytics_data: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Chart data points for Analytics Service. "
+                    "List of dicts with keys like 'label', 'value', etc. "
+                    "Example: [{'label': 'Q1', 'value': 100}, {'label': 'Q2', 'value': 120}]. "
+                    "If not provided, Analytics Service generates placeholder data."
     )
 
     # v3.1: Pre-selected layout ID (assigned during GENERATE_STRAWMAN)

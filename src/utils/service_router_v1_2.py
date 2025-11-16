@@ -2,50 +2,73 @@
 Service Router v1.2 for Director v3.4
 ======================================
 
-Routes slides to Text Service v1.2 endpoints:
-- Hero slides (L29) → /v1.2/hero/title, /section, /closing endpoints
-- Content slides (L25) → /v1.2/generate endpoint
+Routes slides to appropriate content generation services:
+- Pyramid slides (L25) → Illustrator Service /v1.0/pyramid/generate (v3.4-pyramid)
+- Hero slides (L29) → Text Service /v1.2/hero/title, /section, /closing endpoints
+- Content slides (L25) → Text Service /v1.2/generate endpoint
 
 Key features:
+- Pyramid support (v3.4-pyramid): Routes pyramid slides to Illustrator Service
 - Hero slide support (v3.4): Routes title/section/closing slides to specialized hero endpoints
 - Content slide support: Uses unified /v1.2/generate endpoint for 10 content variants
-- Simplified routing logic with automatic error handling
+- Multi-service routing with automatic error handling
 - Prior slides context for narrative flow
 """
 
 import asyncio
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from src.models.agents import Slide, PresentationStrawman
 from src.utils.logger import setup_logger
 from src.utils.text_service_client_v1_2 import TextServiceClientV1_2
 from src.utils.v1_2_transformer import V1_2_Transformer
 from src.utils.hero_request_transformer import HeroRequestTransformer
+from src.clients.illustrator_client import IllustratorClient
+from src.clients.analytics_client import AnalyticsClient
 
 logger = setup_logger(__name__)
 
 
 class ServiceRouterV1_2:
     """
-    Routes slides to Text Service v1.2 unified endpoint.
+    Routes slides to appropriate content generation services.
 
     Features:
-    - Sequential processing (calls /v1.2/generate per slide)
-    - Automatic error handling and reporting
+    - Multi-service routing (Text v1.2 + Illustrator v1.0 + Analytics v3)
+    - Analytics slide support (v3.4-analytics)
+    - Pyramid slide support (v3.4-pyramid)
+    - Sequential processing with automatic error handling
     - Prior slides context for narrative flow
     - Processing statistics and metadata
     """
 
-    def __init__(self, text_service_client: TextServiceClientV1_2):
+    def __init__(
+        self,
+        text_service_client: TextServiceClientV1_2,
+        illustrator_client: Optional[IllustratorClient] = None,
+        analytics_client: Optional[AnalyticsClient] = None
+    ):
         """
-        Initialize service router for v1.2.
+        Initialize service router for v1.2 with multi-service support.
 
         Args:
             text_service_client: TextServiceClientV1_2 instance
+            illustrator_client: Optional IllustratorClient instance for pyramid generation
+            analytics_client: Optional AnalyticsClient instance for chart generation
         """
         self.client = text_service_client
+        self.illustrator_client = illustrator_client
+        self.analytics_client = analytics_client
         self.hero_transformer = HeroRequestTransformer()
-        logger.info("ServiceRouterV1_2 initialized with hero slide support")
+
+        # Build status message
+        services = ["hero slide support"]
+        if illustrator_client:
+            services.append("pyramid support (Illustrator)")
+        if analytics_client:
+            services.append("analytics support (Analytics v3)")
+
+        logger.info(f"ServiceRouterV1_2 initialized with {', '.join(services)}")
 
     async def route_presentation(
         self,
@@ -107,7 +130,7 @@ class ServiceRouterV1_2:
 
     def _validate_slides(self, slides: List[Slide]):
         """
-        Validate slides have required v1.2 fields.
+        Validate slides have required fields for their service type.
 
         Args:
             slides: List of slides to validate
@@ -118,19 +141,23 @@ class ServiceRouterV1_2:
         errors = []
 
         for slide in slides:
-            # Check if this is a hero slide (title, section, closing)
+            # Check slide type
             is_hero = self._is_hero_slide(slide)
+            is_pyramid = self._is_pyramid_slide(slide)
+            is_analytics = self._is_analytics_slide(slide)
 
+            # v3.4-analytics: Analytics slides don't need variant_id (use Analytics Service)
+            # v3.4-pyramid: Pyramid slides don't need variant_id (use Illustrator Service)
             # v3.4 FIX: Hero slides don't need variant_id (they use hero endpoints)
             # Only content slides require variant_id for /v1.2/generate endpoint
-            if not is_hero and not slide.variant_id:
+            if not is_hero and not is_pyramid and not is_analytics and not slide.variant_id:
                 errors.append(
                     f"Slide {slide.slide_id} missing variant_id (required for content slides)"
                 )
 
             if not slide.generated_title:
                 errors.append(
-                    f"Slide {slide.slide_id} missing generated_title (required for v1.2)"
+                    f"Slide {slide.slide_id} missing generated_title (required for all slides)"
                 )
 
         if errors:
@@ -138,7 +165,7 @@ class ServiceRouterV1_2:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        logger.info("✅ All slides validated for v1.2 (generated_title present, variant_id present for content slides)")
+        logger.info("✅ All slides validated (generated_title present, variant_id present for content slides)")
 
     async def _route_sequential(
         self,
@@ -179,6 +206,227 @@ class ServiceRouterV1_2:
             sys.stdout.flush()
 
             try:
+                # v3.4-analytics: Check if this is an analytics slide (BEFORE pyramid/hero check)
+                is_analytics = self._is_analytics_slide(slide)
+
+                if is_analytics:
+                    # Generate analytics chart using Analytics Service
+                    logger.info(
+                        f"📊 Generating analytics slide {slide_number}/{len(slides)}: "
+                        f"{slide.slide_id}"
+                    )
+
+                    # Check if Analytics client is available
+                    if not self.analytics_client:
+                        error_msg = "Analytics slide requires AnalyticsClient but none provided"
+                        logger.error(error_msg)
+                        print(f"   ❌ {error_msg}", flush=True)
+                        sys.stdout.flush()
+                        failed_slides.append({
+                            "slide_number": slide_number,
+                            "slide_id": slide.slide_id,
+                            "slide_type": slide.slide_type_classification,
+                            "error": error_msg
+                        })
+                        continue
+
+                    try:
+                        # Determine analytics type and layout from slide
+                        analytics_type = getattr(slide, 'analytics_type', None) or "revenue_over_time"
+                        layout = getattr(slide, 'layout_id', None) or "L02"
+                        data = getattr(slide, 'analytics_data', None) or []
+
+                        # Validate data
+                        if not data:
+                            logger.warning(f"Analytics slide {slide.slide_id} has no data, using placeholder")
+                            data = [
+                                {"label": "Q1", "value": 100},
+                                {"label": "Q2", "value": 120},
+                                {"label": "Q3", "value": 150},
+                                {"label": "Q4", "value": 180}
+                            ]
+
+                        # v3.4 DIAGNOSTIC: Print analytics generation details
+                        print(f"   📊 CALLING ANALYTICS SERVICE /api/v1/analytics/{layout}/{analytics_type}", flush=True)
+                        print(f"      Topic: {slide.generated_title}", flush=True)
+                        print(f"      Analytics Type: {analytics_type}", flush=True)
+                        print(f"      Layout: {layout}", flush=True)
+                        print(f"      Data Points: {len(data)}", flush=True)
+                        sys.stdout.flush()
+
+                        # Call Analytics Service to generate chart
+                        start = datetime.utcnow()
+                        analytics_response = await self.analytics_client.generate_chart(
+                            analytics_type=analytics_type,
+                            layout=layout,
+                            data=data,
+                            narrative=slide.narrative or slide.generated_title,
+                            context={
+                                "presentation_title": strawman.main_title,
+                                "tone": strawman.overall_theme or "professional",
+                                "audience": strawman.target_audience or "general"
+                            },
+                            presentation_id=getattr(strawman, 'preview_presentation_id', None),
+                            slide_id=slide.slide_id,
+                            slide_number=slide_number
+                        )
+                        duration = (datetime.utcnow() - start).total_seconds()
+
+                        # v3.4 DIAGNOSTIC: Print analytics response
+                        print(f"   ✅ Analytics Service returned in {duration:.2f}s", flush=True)
+                        content = analytics_response.get('content', {})
+                        print(f"      Chart HTML length: {len(content.get('element_3', ''))} chars", flush=True)
+                        print(f"      Observations length: {len(content.get('element_2', ''))} chars", flush=True)
+                        sys.stdout.flush()
+                        total_generation_time += duration
+
+                        # Build successful result with 2-field response for L02
+                        slide_result = {
+                            "slide_number": slide_number,
+                            "slide_id": slide.slide_id,
+                            "content": content,  # Dict with element_3 and element_2 for L02
+                            "metadata": {
+                                **analytics_response.get("metadata", {}),
+                                "service": "analytics_v3",
+                                "slide_type": "analytics",
+                                "analytics_type": analytics_type,
+                                "layout": layout
+                            },
+                            "generation_time_ms": int(duration * 1000),
+                            "endpoint_used": f"/api/v1/analytics/{layout}/{analytics_type}",
+                            "slide_type": "analytics"
+                        }
+
+                        generated_slides.append(slide_result)
+                        logger.info(
+                            f"✅ Analytics slide {slide_number} generated successfully",
+                            extra={
+                                "slide_id": slide.slide_id,
+                                "analytics_type": analytics_type,
+                                "layout": layout,
+                                "generation_time_seconds": duration
+                            }
+                        )
+                        continue  # Skip rest of content slide processing
+
+                    except Exception as e:
+                        error_msg = f"Failed to generate analytics slide: {str(e)}"
+                        logger.error(
+                            error_msg,
+                            extra={
+                                "slide_id": slide.slide_id,
+                                "analytics_type": analytics_type,
+                                "error": str(e)
+                            }
+                        )
+                        print(f"   ❌ Analytics generation failed: {str(e)}", flush=True)
+                        sys.stdout.flush()
+                        failed_slides.append({
+                            "slide_number": slide_number,
+                            "slide_id": slide.slide_id,
+                            "slide_type": "analytics",
+                            "error": error_msg
+                        })
+                        continue
+
+                # v3.4-pyramid: Check if this is a pyramid slide (BEFORE hero check)
+                is_pyramid = self._is_pyramid_slide(slide)
+
+                if is_pyramid:
+                    # Generate pyramid using Illustrator Service
+                    logger.info(
+                        f"🔺 Generating pyramid slide {slide_number}/{len(slides)}: "
+                        f"{slide.slide_id}"
+                    )
+
+                    # Check if Illustrator client is available
+                    if not self.illustrator_client:
+                        error_msg = "Pyramid slide requires IllustratorClient but none provided"
+                        logger.error(error_msg)
+                        print(f"   ❌ {error_msg}", flush=True)
+                        sys.stdout.flush()
+                        failed_slides.append({
+                            "slide_number": slide_number,
+                            "slide_id": slide.slide_id,
+                            "slide_type": slide.slide_type_classification,
+                            "error": error_msg
+                        })
+                        continue
+
+                    try:
+                        # Build visualization_config from key_points
+                        num_levels = len(slide.key_points) if slide.key_points else 4
+                        target_points = slide.key_points if slide.key_points else None
+
+                        # v3.4 DIAGNOSTIC: Print pyramid generation details
+                        print(f"   🔺 CALLING ILLUSTRATOR SERVICE /v1.0/pyramid/generate", flush=True)
+                        print(f"      Topic: {slide.generated_title}", flush=True)
+                        print(f"      Num Levels: {num_levels}", flush=True)
+                        print(f"      Target Points: {target_points}", flush=True)
+                        sys.stdout.flush()
+
+                        # Call Illustrator Service to generate pyramid
+                        start = datetime.utcnow()
+                        pyramid_response = await self.illustrator_client.generate_pyramid(
+                            num_levels=num_levels,
+                            topic=slide.generated_title,
+                            target_points=target_points,
+                            tone=strawman.overall_theme or "professional",
+                            audience=strawman.target_audience or "general",
+                            presentation_id=getattr(strawman, 'preview_presentation_id', None),
+                            slide_id=slide.slide_id,
+                            slide_number=slide_number,
+                            validate_constraints=True  # Enable auto-retry on constraint violations
+                        )
+                        duration = (datetime.utcnow() - start).total_seconds()
+
+                        # v3.4 DIAGNOSTIC: Print pyramid response
+                        print(f"   ✅ Illustrator Service returned in {duration:.2f}s", flush=True)
+                        print(f"      HTML length: {len(pyramid_response.get('html', ''))} chars", flush=True)
+                        print(f"      Validation status: {pyramid_response.get('validation', {}).get('status', 'unknown')}", flush=True)
+                        sys.stdout.flush()
+                        total_generation_time += duration
+
+                        # Build successful result
+                        slide_result = {
+                            "slide_number": slide_number,
+                            "slide_id": slide.slide_id,
+                            "content": pyramid_response["html"],  # HTML string directly
+                            "metadata": {
+                                "generated_content": pyramid_response.get("generated_content", {}),
+                                "validation": pyramid_response.get("validation", {}),
+                                "service": "illustrator_v1.0",
+                                "slide_type": "pyramid"
+                            },
+                            "generation_time_ms": int(duration * 1000),
+                            "endpoint_used": "/v1.0/pyramid/generate",
+                            "slide_type": "pyramid"
+                        }
+
+                        generated_slides.append(slide_result)
+                        logger.info(
+                            f"✅ Pyramid slide {slide_number} generated successfully "
+                            f"({duration:.2f}s)"
+                        )
+
+                    except Exception as pyramid_error:
+                        # v3.4 DIAGNOSTIC: Print pyramid error details
+                        print(f"   ❌ PYRAMID GENERATION FAILED", flush=True)
+                        print(f"      Error Type: {type(pyramid_error).__name__}", flush=True)
+                        print(f"      Error Message: {str(pyramid_error)}", flush=True)
+                        sys.stdout.flush()
+
+                        logger.error(f"Pyramid slide generation failed: {pyramid_error}")
+                        failed_slides.append({
+                            "slide_number": slide_number,
+                            "slide_id": slide.slide_id,
+                            "slide_type": slide.slide_type_classification,
+                            "error": str(pyramid_error),
+                            "endpoint": "/v1.0/pyramid/generate"
+                        })
+
+                    continue  # Skip content slide processing
+
                 # Check if this is a hero slide
                 is_hero = self._is_hero_slide(slide)
 
@@ -353,6 +601,36 @@ class ServiceRouterV1_2:
         """
         hero_types = {'title_slide', 'section_divider', 'closing_slide'}
         return slide.slide_type_classification in hero_types
+
+    def _is_pyramid_slide(self, slide: Slide) -> bool:
+        """
+        Check if slide is a pyramid visualization slide.
+
+        Pyramid slides are generated by Illustrator Service v1.0,
+        not Text Service v1.2.
+
+        Args:
+            slide: Slide to check
+
+        Returns:
+            True if pyramid slide, False otherwise
+        """
+        return slide.slide_type_classification == 'pyramid'
+
+    def _is_analytics_slide(self, slide: Slide) -> bool:
+        """
+        Check if slide is an analytics/chart visualization slide.
+
+        Analytics slides are generated by Analytics Service v3,
+        not Text Service v1.2.
+
+        Args:
+            slide: Slide to check
+
+        Returns:
+            True if analytics slide, False otherwise
+        """
+        return slide.slide_type_classification == 'analytics'
 
     def _build_slide_request(
         self,

@@ -1,0 +1,18 @@
+{
+  "status": "success",
+  "presentation_url": "https://web-production-f0d13.up.railway.app/p/350b7864-820c-4137-b923-18e7ebbf60ae",
+  "presentation_id": "350b7864-820c-4137-b923-18e7ebbf60ae",
+  "railway_url": "https://web-production-f0d13.up.railway.app",
+  "slide_count": 4,
+  "pyramid_count": 3,
+  "pyramids": [
+    "Organizational Hierarchy",
+    "Product Strategy",
+    "Career Progression"
+  ],
+  "response": {
+    "id": "350b7864-820c-4137-b923-18e7ebbf60ae",
+    "url": "/p/350b7864-820c-4137-b923-18e7ebbf60ae",
+    "message": "Presentation 'Pyramid Bug Fix Verification' created successfully"
+  }
+}

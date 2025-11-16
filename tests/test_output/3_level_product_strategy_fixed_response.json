@@ -1,0 +1,80 @@
+{
+  "html_length": 9229,
+  "generation_time_ms": 2618,
+  "generated_content": {
+    "level_3_label": "Market Domination",
+    "level_3_description": "Achieve <strong>market dominance</strong> through continuous innovation.",
+    "level_2_label": "Strategic Execution & Growth",
+    "level_2_description": "Implement <strong>strategic initiatives</strong> for sustainable growth.",
+    "level_1_label": "Visionary Planning & Alignment",
+    "level_1_description": "Define <strong>clear product vision</strong> and align teams.",
+    "overview_heading": "Mastering Product Development Strategy",
+    "overview_text": "A robust product development strategy guides innovation from initial concept to market leadership. This pyramid outlines the essential stages: establishing a clear vision, meticulous planning, and flawless execution to achieve sustained success and competitive advantage."
+  },
+  "validation": {
+    "valid": false,
+    "violations": [
+      {
+        "field": "level_3_label",
+        "actual_length": 17,
+        "min_required": 10,
+        "max_required": 15,
+        "status": "over",
+        "text": "Market Domination"
+      },
+      {
+        "field": "level_2_label",
+        "actual_length": 28,
+        "min_required": 12,
+        "max_required": 20,
+        "status": "over",
+        "text": "Strategic Execution & Growth"
+      },
+      {
+        "field": "level_1_label",
+        "actual_length": 30,
+        "min_required": 12,
+        "max_required": 20,
+        "status": "over",
+        "text": "Visionary Planning & Alignment"
+      },
+      {
+        "field": "level_1_description",
+        "actual_length": 44,
+        "min_required": 50,
+        "max_required": 60,
+        "status": "under",
+        "text": "Define <strong>clear product vision</strong> and a..."
+      },
+      {
+        "field": "overview_text",
+        "actual_length": 271,
+        "min_required": 200,
+        "max_required": 250,
+        "status": "over",
+        "text": "A robust product development strategy guides innovation from initial concept to market leadership. T..."
+      }
+    ]
+  },
+  "metadata": {
+    "num_levels": 3,
+    "template_file": "3.html",
+    "theme": "professional",
+    "size": "medium",
+    "topic": "Product Development Strategy",
+    "generation_time_ms": 2580,
+    "attempts": 3,
+    "model": "gemini-2.5-flash-lite",
+    "usage": {
+      "prompt_token_count": 633,
+      "candidates_token_count": 172,
+      "total_token_count": 805
+    }
+  },
+  "placeholder_check": {
+    "has_overview_heading": false,
+    "has_overview_text": false,
+    "remaining_placeholders": [],
+    "status": "PASS"
+  }
+}

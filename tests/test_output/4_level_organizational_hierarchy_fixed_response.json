@@ -1,0 +1,98 @@
+{
+  "html_length": 10339,
+  "generation_time_ms": 3347,
+  "generated_content": {
+    "level_4_label": "Vision Driven",
+    "level_4_description": "Achieve <strong>strategic goals</strong> and market dominance.",
+    "level_3_label": "Strategic Department Leadership",
+    "level_3_description": "Guide <strong>functional excellence</strong> and cross-team synergy.",
+    "level_2_label": "Effective Team Management",
+    "level_2_description": "Empower teams and foster <strong>operational efficiency</strong>.",
+    "level_1_label": "Individual Contributor Impact",
+    "level_1_description": "Execute tasks and drive <strong>project success</strong> daily.",
+    "overview_heading": "Building a Robust Corporate Structure",
+    "overview_text": "Our corporate structure forms a pyramid, with individual contributors at the base, supported by team managers, departmental heads, and culminating in executive leadership. This hierarchy ensures clear lines of communication, accountability, and strategic alignment for sustained organizational growth and success."
+  },
+  "validation": {
+    "valid": false,
+    "violations": [
+      {
+        "field": "level_4_description",
+        "actual_length": 45,
+        "min_required": 50,
+        "max_required": 60,
+        "status": "under",
+        "text": "Achieve <strong>strategic goals</strong> and marke..."
+      },
+      {
+        "field": "level_3_label",
+        "actual_length": 31,
+        "min_required": 12,
+        "max_required": 20,
+        "status": "over",
+        "text": "Strategic Department Leadership"
+      },
+      {
+        "field": "level_2_label",
+        "actual_length": 25,
+        "min_required": 12,
+        "max_required": 20,
+        "status": "over",
+        "text": "Effective Team Management"
+      },
+      {
+        "field": "level_2_description",
+        "actual_length": 48,
+        "min_required": 50,
+        "max_required": 60,
+        "status": "under",
+        "text": "Empower teams and foster <strong>operational effic..."
+      },
+      {
+        "field": "level_1_label",
+        "actual_length": 29,
+        "min_required": 12,
+        "max_required": 20,
+        "status": "over",
+        "text": "Individual Contributor Impact"
+      },
+      {
+        "field": "level_1_description",
+        "actual_length": 46,
+        "min_required": 50,
+        "max_required": 60,
+        "status": "under",
+        "text": "Execute tasks and drive <strong>project success</s..."
+      },
+      {
+        "field": "overview_text",
+        "actual_length": 313,
+        "min_required": 200,
+        "max_required": 250,
+        "status": "over",
+        "text": "Our corporate structure forms a pyramid, with individual contributors at the base, supported by team..."
+      }
+    ]
+  },
+  "metadata": {
+    "num_levels": 4,
+    "template_file": "4.html",
+    "theme": "professional",
+    "size": "medium",
+    "topic": "Corporate Organization Structure",
+    "generation_time_ms": 3297,
+    "attempts": 3,
+    "model": "gemini-2.5-flash-lite",
+    "usage": {
+      "prompt_token_count": 718,
+      "candidates_token_count": 213,
+      "total_token_count": 931
+    }
+  },
+  "placeholder_check": {
+    "has_overview_heading": false,
+    "has_overview_text": false,
+    "remaining_placeholders": [],
+    "status": "PASS"
+  }
+}

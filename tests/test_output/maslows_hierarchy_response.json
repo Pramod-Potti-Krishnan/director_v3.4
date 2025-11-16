@@ -1,0 +1,59 @@
+{
+  "html_length": 10058,
+  "generated_content": {
+    "level_5_label": "Achieve Peak",
+    "level_5_description": "Realize your full <strong>potential</strong> and live authentically.",
+    "level_4_label": "Esteem Needs Met",
+    "level_4_description": "Gain confidence and respect from <strong>self and others</strong>.",
+    "level_3_label": "Love and Belonging",
+    "level_3_description": "Form meaningful relationships and feel <strong>connected</strong>.",
+    "level_2_label": "Safety Needs Secured",
+    "level_2_description": "Ensure stability, security, and a <strong>safe environment</strong>.",
+    "level_1_label": "Basic Physiological Needs",
+    "level_1_description": "Satisfy fundamental requirements for <strong>survival</strong> and health."
+  },
+  "validation": {
+    "valid": false,
+    "violations": [
+      {
+        "field": "level_4_description",
+        "actual_length": 49,
+        "min_required": 50,
+        "max_required": 60,
+        "status": "under",
+        "text": "Gain confidence and respect from <strong>self and ..."
+      },
+      {
+        "field": "level_3_description",
+        "actual_length": 49,
+        "min_required": 50,
+        "max_required": 60,
+        "status": "under",
+        "text": "Form meaningful relationships and feel <strong>con..."
+      },
+      {
+        "field": "level_1_label",
+        "actual_length": 25,
+        "min_required": 12,
+        "max_required": 20,
+        "status": "over",
+        "text": "Basic Physiological Needs"
+      }
+    ]
+  },
+  "metadata": {
+    "num_levels": 5,
+    "template_file": "5.html",
+    "theme": "professional",
+    "size": "medium",
+    "topic": "Maslow's Hierarchy of Needs",
+    "generation_time_ms": 2343,
+    "attempts": 3,
+    "model": "gemini-2.5-flash-lite",
+    "usage": {
+      "prompt_token_count": 745,
+      "candidates_token_count": 185,
+      "total_token_count": 930
+    }
+  }
+}

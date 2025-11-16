@@ -1,0 +1,58 @@
+{
+  "html_length": 10104,
+  "generation_time_ms": 2698,
+  "generated_content": {
+    "level_5_label": "Chief Architect",
+    "level_5_description": "Define <strong>technical direction</strong>, shape future innovation.",
+    "level_4_label": "Principal Engineer",
+    "level_4_description": "Lead complex projects, mentor teams, drive <strong>strategic impact</strong>.",
+    "level_3_label": "Senior Engineer",
+    "level_3_description": "Own critical systems, deliver high-quality solutions, <strong>technical leadership</strong>.",
+    "level_2_label": "Mid-Level Engineer",
+    "level_2_description": "Develop features independently, contribute to design, <strong>problem-solving</strong>.",
+    "level_1_label": "Junior Engineer",
+    "level_1_description": "Learn systems, execute tasks, build <strong>foundational skills</strong>."
+  },
+  "validation": {
+    "valid": false,
+    "violations": [
+      {
+        "field": "level_3_description",
+        "actual_length": 75,
+        "min_required": 50,
+        "max_required": 60,
+        "status": "over",
+        "text": "Own critical systems, deliver high-quality solutio..."
+      },
+      {
+        "field": "level_2_description",
+        "actual_length": 70,
+        "min_required": 50,
+        "max_required": 60,
+        "status": "over",
+        "text": "Develop features independently, contribute to desi..."
+      }
+    ]
+  },
+  "metadata": {
+    "num_levels": 5,
+    "template_file": "5.html",
+    "theme": "professional",
+    "size": "medium",
+    "topic": "Engineering Career Progression",
+    "generation_time_ms": 2668,
+    "attempts": 3,
+    "model": "gemini-2.5-flash-lite",
+    "usage": {
+      "prompt_token_count": 738,
+      "candidates_token_count": 190,
+      "total_token_count": 928
+    }
+  },
+  "placeholder_check": {
+    "has_overview_heading": false,
+    "has_overview_text": false,
+    "remaining_placeholders": [],
+    "status": "PASS"
+  }
+}

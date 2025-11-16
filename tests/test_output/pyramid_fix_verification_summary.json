@@ -1,0 +1,36 @@
+{
+  "test_date": "2025-11-15T19:18:30.230529",
+  "test_status": "PASSED",
+  "pyramids_tested": 3,
+  "pyramids_passed": 3,
+  "pyramids_failed": 0,
+  "results": [
+    {
+      "test": "4-level Organizational Hierarchy",
+      "num_levels": 4,
+      "status": "\u2705 PASS",
+      "html_length": 10339,
+      "generation_time_ms": 3347,
+      "has_placeholders": false,
+      "placeholders": []
+    },
+    {
+      "test": "3-level Product Strategy",
+      "num_levels": 3,
+      "status": "\u2705 PASS",
+      "html_length": 9229,
+      "generation_time_ms": 2618,
+      "has_placeholders": false,
+      "placeholders": []
+    },
+    {
+      "test": "5-level Career Path",
+      "num_levels": 5,
+      "status": "\u2705 PASS",
+      "html_length": 10104,
+      "generation_time_ms": 2698,
+      "has_placeholders": false,
+      "placeholders": []
+    }
+  ]
+}

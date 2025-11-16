@@ -1,0 +1,34 @@
+{
+  "timestamp": "2025-11-15T16:23:14.777459",
+  "pyramids": [
+    {
+      "topic": "Organizational Structure",
+      "success": true,
+      "validation_valid": false,
+      "generation_time_ms": 4042,
+      "html_size": 10119
+    },
+    {
+      "topic": "Product Development Stages",
+      "success": true,
+      "validation_valid": false,
+      "generation_time_ms": 3382,
+      "html_size": 8995
+    },
+    {
+      "topic": "Employee Growth Framework",
+      "success": true,
+      "validation_valid": false,
+      "generation_time_ms": 4056,
+      "html_size": 10162
+    }
+  ],
+  "presentation": {
+    "id": "246d45d4-d9b1-4224-8e4f-c3ed5abc5a67",
+    "url": "https://web-production-f0d13.up.railway.app/p/246d45d4-d9b1-4224-8e4f-c3ed5abc5a67",
+    "slide_count": 5,
+    "success": true
+  },
+  "success": true,
+  "errors": []
+}

@@ -1,0 +1,16 @@
+{
+  "response": {
+    "id": "6f21ade2-c67c-4ef8-9ff0-993596fbce7e",
+    "url": "/p/6f21ade2-c67c-4ef8-9ff0-993596fbce7e",
+    "message": "Presentation 'Pyramid Visualization Showcase' created successfully"
+  },
+  "full_url": "https://web-production-f0d13.up.railway.app/p/6f21ade2-c67c-4ef8-9ff0-993596fbce7e",
+  "railway_url": "https://web-production-f0d13.up.railway.app",
+  "slide_count": 5,
+  "pyramid_count": 3,
+  "pyramids": [
+    "Organizational Hierarchy",
+    "Maslow's Hierarchy of Needs",
+    "Software Engineering Career Path"
+  ]
+}
