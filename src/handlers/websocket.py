@@ -6,6 +6,7 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Any, List
 from fastapi import WebSocket
+from starlette.websockets import WebSocketState
 
 from src.utils.logger import setup_logger
 from src.agents.intent_router import IntentRouter
@@ -49,6 +50,10 @@ class WebSocketHandler:
         self.packager = MessagePackager()
         self.streamlined_packager = StreamlinedMessagePackager()
         self.workflow = WorkflowOrchestrator()
+
+        # Connection tracking to prevent multiple connections per session
+        self.active_connections: Dict[str, WebSocket] = {}
+        self.connection_lock = asyncio.Lock()
 
         logger.info("WebSocketHandler initialized successfully with streamlined protocol: %s",
                    self.settings.USE_STREAMLINED_PROTOCOL)
@@ -141,6 +146,29 @@ class WebSocketHandler:
             session_id: The session ID from query parameter
             user_id: The user ID from query parameter
         """
+        # CRITICAL FIX: Check for existing connection to prevent multiple connections per session
+        # This prevents race conditions, duplicate message processing, and strawman regeneration loops
+        async with self.connection_lock:
+            if session_id in self.active_connections:
+                existing_ws = self.active_connections[session_id]
+
+                # Check if existing connection is still alive
+                if existing_ws.client_state == WebSocketState.CONNECTED:
+                    logger.warning(
+                        f"🚫 Rejected duplicate connection for session {session_id} (user: {user_id}). "
+                        f"A connection already exists for this session."
+                    )
+                    await websocket.close(code=1008, reason="Session already connected from another tab or window")
+                    return
+                else:
+                    # Stale connection exists, remove it
+                    logger.info(f"🔄 Removing stale connection for session {session_id}")
+                    del self.active_connections[session_id]
+
+            # Register new connection
+            self.active_connections[session_id] = websocket
+            logger.info(f"✅ Registered new connection for session {session_id} (user: {user_id})")
+
         try:
             # Store user_id and websocket for use in other methods
             self.current_user_id = user_id
@@ -174,7 +202,17 @@ class WebSocketHandler:
                 logger.debug(f"Waiting for message from session {session_id}")
                 data = await websocket.receive_text()
                 message = json.loads(data)
-                logger.info(f"Received message for session {session_id}: type={message.get('type')}, data keys={list(message.get('data', {}).keys())}")
+
+                message_type = message.get('type', '')
+
+                # CRITICAL FIX: Filter ping messages (heartbeat keep-alive)
+                # Frontend sends {"type": "ping"} every 15 seconds to keep connection alive
+                # These should NOT be processed as user messages
+                if message_type == 'ping':
+                    logger.debug(f"💓 Heartbeat ping received for session {session_id}, ignoring")
+                    continue  # Skip processing, wait for next message
+
+                logger.info(f"Received message for session {session_id}: type={message_type}, data keys={list(message.get('data', {}).keys())}")
 
                 # Process message
                 await self._handle_message(websocket, session, message)
@@ -187,6 +225,13 @@ class WebSocketHandler:
                     await websocket.close()
                 except Exception:
                     pass  # Ignore errors when closing
+        finally:
+            # CRITICAL FIX: Cleanup connection tracking on disconnect
+            # This ensures the session can reconnect after disconnect
+            async with self.connection_lock:
+                if session_id in self.active_connections:
+                    del self.active_connections[session_id]
+                    logger.info(f"🧹 Removed connection tracking for session {session_id} on disconnect")
 
     async def _send_greeting(self, websocket: WebSocket, session: Any):
         """Send initial greeting message."""
@@ -363,6 +408,26 @@ class WebSocketHandler:
             use_streamlined = self._should_use_streamlined(session.id)
             # v3.1: Added CONTENT_GENERATION as a long-running state (text generation takes 5-15s per slide)
             if use_streamlined and session.current_state in ["GENERATE_STRAWMAN", "REFINE_STRAWMAN", "CONTENT_GENERATION"]:
+                # CRITICAL FIX: Check if strawman already exists before sending pre-generation status
+                # This prevents unnecessary regeneration and provides cached response immediately
+                if session.current_state == "GENERATE_STRAWMAN" and session.presentation_strawman:
+                    logger.info(f"✅ Strawman already exists for session {session.id}, returning cached version (idempotency check)")
+
+                    # Build response from cached strawman
+                    response = self._build_cached_strawman_response(session)
+
+                    # Package and send cached response
+                    messages = self.streamlined_packager.package_messages(
+                        session_id=session.id,
+                        state=session.current_state,
+                        agent_output=response,
+                        context=state_context
+                    )
+                    await self._send_messages(websocket, messages)
+                    logger.info(f"Sent cached strawman response for session {session.id}")
+                    return  # Early return - skip Director processing
+
+                # Only send pre-generation status if actually generating (not cached)
                 pre_status = self.streamlined_packager.create_pre_generation_status(
                     session_id=session.id,
                     state=session.current_state
@@ -370,7 +435,7 @@ class WebSocketHandler:
                 await websocket.send_json(pre_status.model_dump(mode='json'))
                 await asyncio.sleep(0.1)
 
-            # STEP 5: Process with Director
+            # STEP 5: Process with Director (only if not already cached)
             response = await self.director.process(state_context)
 
             # Store in history
@@ -527,3 +592,39 @@ class WebSocketHandler:
             logger.info(f"State remains: {current_state} (intent: {intent.intent_type})")
 
         return next_state
+
+    def _build_cached_strawman_response(self, session: Any) -> Any:
+        """
+        Build response from cached strawman data (idempotency helper).
+
+        This method is used when a strawman already exists in the session,
+        preventing unnecessary regeneration and API calls.
+
+        Args:
+            session: Session object with existing strawman in presentation_strawman field
+
+        Returns:
+            Response object matching Director output format (either PresentationStrawman
+            or hybrid dict with type="presentation_url")
+        """
+        from src.models.agents import PresentationStrawman
+
+        strawman_data = session.presentation_strawman
+
+        if not strawman_data:
+            logger.warning(f"_build_cached_strawman_response called but no strawman data in session {session.id}")
+            return None
+
+        # Check if strawman includes preview_url (v2.0+ format with deck-builder integration)
+        if isinstance(strawman_data, dict) and 'preview_url' in strawman_data:
+            # Return hybrid response format (matches v2.0/v3.1 Director output)
+            logger.debug(f"Building cached hybrid response with preview_url for session {session.id}")
+            return {
+                "type": "presentation_url",
+                "url": strawman_data['preview_url'],
+                "strawman": PresentationStrawman(**strawman_data) if not isinstance(strawman_data.get('slides'), type(None)) else strawman_data
+            }
+        else:
+            # Return plain strawman object (v1.0 format)
+            logger.debug(f"Building cached PresentationStrawman response for session {session.id}")
+            return PresentationStrawman(**strawman_data) if isinstance(strawman_data, dict) else strawman_data
