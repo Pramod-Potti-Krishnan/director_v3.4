@@ -201,6 +201,17 @@ class WebSocketHandler:
                 # Receive message
                 logger.debug(f"Waiting for message from session {session_id}")
                 data = await websocket.receive_text()
+
+                # TRANSITION FIX: Handle both raw "ping" and JSON {"type":"ping"} formats
+                # Frontend changed to raw "ping" on 2025-11-21, but we need backward compatibility
+                if data.strip() == "ping":
+                    logger.info(f"💓 Heartbeat ping (raw text) received for session {session_id}, ignoring")
+                    try:
+                        await websocket.send_text("pong")  # Respond to raw ping
+                    except Exception as pong_error:
+                        logger.debug(f"Failed to send pong: {pong_error}")
+                    continue  # Skip processing
+
                 message = json.loads(data)
 
                 message_type = message.get('type', '')
@@ -209,7 +220,7 @@ class WebSocketHandler:
                 # Frontend sends {"type": "ping"} every 15 seconds to keep connection alive
                 # These should NOT be processed as user messages
                 if message_type == 'ping':
-                    logger.debug(f"💓 Heartbeat ping received for session {session_id}, ignoring")
+                    logger.info(f"💓 Heartbeat ping received for session {session_id}, ignoring")
                     continue  # Skip processing, wait for next message
 
                 logger.info(f"Received message for session {session_id}: type={message_type}, data keys={list(message.get('data', {}).keys())}")
@@ -287,12 +298,24 @@ class WebSocketHandler:
             message: The incoming message
         """
         try:
+            # CRITICAL FIX: Refresh session from database/cache to get latest state
+            # This prevents stale session bug where presentation_strawman is None
+            # even though it was saved to the database, causing infinite regeneration loops
+            session = await self.sessions.get_or_create(session.id, self.current_user_id)
+
             # Validate we have user_id
             if not hasattr(self, 'current_user_id') or not self.current_user_id:
                 raise RuntimeError("User ID not set in handler - connection not properly initialized")
 
             # Extract user input
             user_input = message.get('data', {}).get('text', '')
+
+            # CRITICAL FIX: Validate user input is not empty
+            # Empty input should NOT trigger state transitions or intent classification
+            if not user_input or not user_input.strip():
+                logger.warning(f"Received empty/whitespace user input for session {session_id}, ignoring message")
+                return  # Skip processing empty input
+
             logger.info(f"Processing user input in state {session.current_state}")
 
             # STEP 1: Classify user intent
