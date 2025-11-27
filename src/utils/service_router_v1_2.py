@@ -70,6 +70,226 @@ class ServiceRouterV1_2:
 
         logger.info(f"ServiceRouterV1_2 initialized with {', '.join(services)}")
 
+    def _classify_error(
+        self,
+        error: Exception,
+        response: Optional[Any] = None
+    ) -> Dict[str, str]:
+        """
+        Classify error into actionable categories for debugging.
+
+        Args:
+            error: Exception that occurred
+            response: Optional HTTP response object
+
+        Returns:
+            Dict with:
+            - error_type: Exception class name
+            - error_category: timeout|http_4xx|http_5xx|connection|validation|unknown
+            - suggested_action: User-friendly remediation suggestion
+            - http_status: HTTP status code if applicable
+        """
+        import httpx
+
+        error_type = type(error).__name__
+        error_msg = str(error).lower()
+
+        # Timeout errors
+        if isinstance(error, (httpx.TimeoutException, asyncio.TimeoutError)) or "timeout" in error_msg:
+            return {
+                "error_type": error_type,
+                "error_category": "timeout",
+                "suggested_action": "Service may be overloaded or slow. Retry or increase timeout settings.",
+                "http_status": None
+            }
+
+        # HTTP status errors
+        if isinstance(error, httpx.HTTPStatusError) and response:
+            status = response.status_code
+            if 400 <= status < 500:
+                return {
+                    "error_type": error_type,
+                    "error_category": "http_4xx",
+                    "suggested_action": f"Client error ({status}). Check request payload, authentication, or endpoint URL.",
+                    "http_status": status
+                }
+            elif 500 <= status < 600:
+                return {
+                    "error_type": error_type,
+                    "error_category": "http_5xx",
+                    "suggested_action": f"Server error ({status}). Service may be experiencing issues or bugs. Check service logs.",
+                    "http_status": status
+                }
+
+        # Connection errors
+        if "connection" in error_msg or "refused" in error_msg or "unreachable" in error_msg:
+            return {
+                "error_type": error_type,
+                "error_category": "connection",
+                "suggested_action": "Cannot reach service. Check service URL, network connectivity, and ensure service is running.",
+                "http_status": None
+            }
+
+        # Validation errors
+        if "validation" in error_msg or "invalid" in error_msg or "missing" in error_msg:
+            return {
+                "error_type": error_type,
+                "error_category": "validation",
+                "suggested_action": "Request payload validation failed. Check required fields and data formats.",
+                "http_status": None
+            }
+
+        # Unknown errors
+        return {
+            "error_type": error_type,
+            "error_category": "unknown",
+            "suggested_action": f"Unknown error: {error_type}. Check logs for full traceback and contact support.",
+            "http_status": None
+        }
+
+    def _generate_error_summary(self, failed_slides: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Generate comprehensive error summary from failed slides (Tier 2 debugging).
+
+        Analyzes all failures to identify patterns, count errors by category/service,
+        and provide actionable recommendations for debugging and resolution.
+
+        Args:
+            failed_slides: List of failed slide records with error classification
+
+        Returns:
+            Dict with:
+            - total_failures: Total number of failed slides
+            - by_category: Error counts grouped by category (timeout, http_4xx, etc.)
+            - by_service: Error counts grouped by service (analytics_v3, text_service_v1.2, etc.)
+            - by_endpoint: Error counts grouped by endpoint
+            - critical_issues: List of high-priority issues requiring attention
+            - recommended_actions: Prioritized list of remediation steps
+            - failure_details: Complete failure records for support tickets
+        """
+        if not failed_slides:
+            return {
+                "total_failures": 0,
+                "by_category": {},
+                "by_service": {},
+                "by_endpoint": {},
+                "critical_issues": [],
+                "recommended_actions": [],
+                "failure_details": []
+            }
+
+        # Aggregate by category
+        by_category = {}
+        for failure in failed_slides:
+            category = failure.get("error_category", "unknown")
+            by_category[category] = by_category.get(category, 0) + 1
+
+        # Aggregate by service
+        by_service = {}
+        for failure in failed_slides:
+            service = failure.get("service", "unknown")
+            by_service[service] = by_service.get(service, 0) + 1
+
+        # Aggregate by endpoint
+        by_endpoint = {}
+        for failure in failed_slides:
+            endpoint = failure.get("endpoint", "unknown")
+            if endpoint:  # Skip None endpoints
+                by_endpoint[endpoint] = by_endpoint.get(endpoint, 0) + 1
+
+        # Identify critical issues (>= 50% failure rate or specific patterns)
+        critical_issues = []
+        total_failures = len(failed_slides)
+
+        # Critical: Validation errors (missing clients)
+        validation_count = by_category.get("validation", 0)
+        if validation_count > 0:
+            critical_issues.append({
+                "severity": "high",
+                "issue": "Service client not initialized",
+                "count": validation_count,
+                "impact": "Slides cannot be generated without proper service clients",
+                "action": "Check ServiceRouter initialization and ensure all required clients are provided"
+            })
+
+        # Critical: Timeout errors (service performance issues)
+        timeout_count = by_category.get("timeout", 0)
+        if timeout_count > 0:
+            critical_issues.append({
+                "severity": "medium",
+                "issue": "Service timeout errors",
+                "count": timeout_count,
+                "impact": "Services are taking too long to respond or hanging",
+                "action": "Check service health, increase timeout settings, or optimize service performance"
+            })
+
+        # Critical: HTTP 5xx errors (service bugs)
+        http_5xx_count = by_category.get("http_5xx", 0)
+        if http_5xx_count > 0:
+            critical_issues.append({
+                "severity": "high",
+                "issue": "Server-side service errors (5xx)",
+                "count": http_5xx_count,
+                "impact": "Services are experiencing internal errors or bugs",
+                "action": "Review service logs, check for service crashes, and investigate root cause"
+            })
+
+        # Critical: HTTP 4xx errors (invalid requests)
+        http_4xx_count = by_category.get("http_4xx", 0)
+        if http_4xx_count > 0:
+            critical_issues.append({
+                "severity": "medium",
+                "issue": "Client request errors (4xx)",
+                "count": http_4xx_count,
+                "impact": "Invalid request payloads, authentication issues, or incorrect endpoints",
+                "action": "Validate request schemas, check authentication tokens, and verify endpoint URLs"
+            })
+
+        # Generate prioritized recommended actions
+        recommended_actions = []
+
+        # Priority 1: Fix validation errors first (blocking all slides of that type)
+        if validation_count > 0:
+            recommended_actions.append({
+                "priority": 1,
+                "action": "Initialize missing service clients in ServiceRouter configuration",
+                "rationale": f"{validation_count} slides blocked by missing clients"
+            })
+
+        # Priority 2: Fix HTTP 5xx errors (service bugs)
+        if http_5xx_count > 0:
+            recommended_actions.append({
+                "priority": 2,
+                "action": "Investigate and fix server-side service errors",
+                "rationale": f"{http_5xx_count} slides failing due to service bugs or crashes"
+            })
+
+        # Priority 3: Optimize timeouts
+        if timeout_count > 0:
+            recommended_actions.append({
+                "priority": 3,
+                "action": "Optimize service performance or increase timeout settings",
+                "rationale": f"{timeout_count} slides timing out during generation"
+            })
+
+        # Priority 4: Fix request validation
+        if http_4xx_count > 0:
+            recommended_actions.append({
+                "priority": 4,
+                "action": "Review and fix request payloads, schemas, or authentication",
+                "rationale": f"{http_4xx_count} slides rejected by services due to invalid requests"
+            })
+
+        return {
+            "total_failures": total_failures,
+            "by_category": by_category,
+            "by_service": by_service,
+            "by_endpoint": by_endpoint,
+            "critical_issues": critical_issues,
+            "recommended_actions": sorted(recommended_actions, key=lambda x: x["priority"]),
+            "failure_details": failed_slides  # Include full records for support tickets
+        }
+
     async def route_presentation(
         self,
         strawman: PresentationStrawman,
@@ -226,7 +446,17 @@ class ServiceRouterV1_2:
                             "slide_number": slide_number,
                             "slide_id": slide.slide_id,
                             "slide_type": slide.slide_type_classification,
-                            "error": error_msg
+                            "error": error_msg,
+                            # Tier 1 debugging: Service context
+                            "service": "analytics_v3",
+                            "endpoint": None,  # No endpoint reached (client missing)
+                            "chart_type": getattr(slide, 'chart_id', None),
+                            "layout": slide.layout_id,
+                            "analytics_type": getattr(slide, 'analytics_type', None),
+                            # Error classification
+                            "error_category": "validation",
+                            "suggested_action": "Ensure AnalyticsClient is properly initialized in ServiceRouter configuration.",
+                            "http_status": None
                         })
                         continue
 
@@ -237,8 +467,26 @@ class ServiceRouterV1_2:
                             logger.warning(f"Analytics slide {slide.slide_id} missing chart_id, defaulting to 'line'")
                             chart_type = "line"
 
+                        # v3.4.1: Check if chart type is disabled due to known issues
+                        DISABLED_CHARTS = {
+                            "bar_grouped": "P0 - Multi-series data structure bug",
+                            "bar_stacked": "P0 - Multi-series data structure bug",
+                            "area_stacked": "P0 - Multi-series data structure bug",
+                            "mixed": "P0 - Multi-series data structure bug",
+                            "d3_choropleth_usa": "P1 - Not implemented",
+                            "d3_sankey": "P1 - Plugin not loaded"
+                        }
+
+                        if chart_type in DISABLED_CHARTS:
+                            logger.warning(
+                                f"Analytics slide {slide.slide_id}: chart_type '{chart_type}' is disabled "
+                                f"({DISABLED_CHARTS[chart_type]}). Using fallback chart type 'line'."
+                            )
+                            chart_type = "line"
+
                         # Map chart_type to analytics_endpoint using chart_type_mappings
                         # This mapping is from config/analytics_variants.json
+                        # Note: Disabled charts removed from mapping
                         chart_type_mappings = {
                             "line": "revenue_over_time",
                             "bar_vertical": "quarterly_comparison",
@@ -250,14 +498,14 @@ class ServiceRouterV1_2:
                             "radar": "multi_metric_comparison",
                             "polar_area": "radial_composition",
                             "area": "revenue_over_time",
-                            "bar_grouped": "quarterly_comparison",
-                            "bar_stacked": "quarterly_comparison",
-                            "area_stacked": "revenue_over_time",
-                            "mixed": "kpi_metrics",
+                            # "bar_grouped": "quarterly_comparison",  # DISABLED: P0 - Multi-series bug
+                            # "bar_stacked": "quarterly_comparison",  # DISABLED: P0 - Multi-series bug
+                            # "area_stacked": "revenue_over_time",  # DISABLED: P0 - Multi-series bug
+                            # "mixed": "kpi_metrics",  # DISABLED: P0 - Multi-series bug
                             "d3_treemap": "market_share",
-                            "d3_sunburst": "market_share",
-                            "d3_choropleth_usa": "market_share",
-                            "d3_sankey": "market_share"
+                            "d3_sunburst": "market_share"
+                            # "d3_choropleth_usa": "market_share",  # DISABLED: P1 - Not implemented
+                            # "d3_sankey": "market_share"  # DISABLED: P1 - Plugin not loaded
                         }
                         analytics_type = chart_type_mappings.get(chart_type, "revenue_over_time")
 
@@ -346,21 +594,40 @@ class ServiceRouterV1_2:
 
                     except Exception as e:
                         error_msg = f"Failed to generate analytics slide: {str(e)}"
+
+                        # Tier 1: Classify error for debugging
+                        error_info = self._classify_error(e, response=analytics_response if 'analytics_response' in locals() else None)
+
                         logger.error(
                             error_msg,
                             extra={
                                 "slide_id": slide.slide_id,
                                 "analytics_type": analytics_type,
-                                "error": str(e)
+                                "error": str(e),
+                                "error_category": error_info["error_category"]
                             }
                         )
                         print(f"   ❌ Analytics generation failed: {str(e)}", flush=True)
+                        print(f"      Error Category: {error_info['error_category']}", flush=True)
+                        print(f"      Suggested Action: {error_info['suggested_action']}", flush=True)
                         sys.stdout.flush()
+
                         failed_slides.append({
                             "slide_number": slide_number,
                             "slide_id": slide.slide_id,
                             "slide_type": "analytics",
-                            "error": error_msg
+                            "error": error_msg,
+                            # Tier 1 debugging: Service context
+                            "service": "analytics_v3",
+                            "endpoint": "/v3/generate-chart",  # Analytics Service endpoint
+                            "chart_type": chart_type,
+                            "layout": layout,
+                            "analytics_type": analytics_type,
+                            # Error classification
+                            "error_type": error_info["error_type"],
+                            "error_category": error_info["error_category"],
+                            "suggested_action": error_info["suggested_action"],
+                            "http_status": error_info["http_status"]
                         })
                         continue
 
@@ -384,7 +651,14 @@ class ServiceRouterV1_2:
                             "slide_number": slide_number,
                             "slide_id": slide.slide_id,
                             "slide_type": slide.slide_type_classification,
-                            "error": error_msg
+                            "error": error_msg,
+                            # Tier 1 debugging: Service context
+                            "service": "illustrator_v1.0",
+                            "endpoint": None,  # No endpoint reached (client missing)
+                            # Error classification
+                            "error_category": "validation",
+                            "suggested_action": "Ensure IllustratorClient is properly initialized in ServiceRouter configuration.",
+                            "http_status": None
                         })
                         continue
 
@@ -445,19 +719,38 @@ class ServiceRouterV1_2:
                         )
 
                     except Exception as pyramid_error:
+                        # Tier 1: Classify error for debugging
+                        error_info = self._classify_error(pyramid_error, response=pyramid_response if 'pyramid_response' in locals() else None)
+
                         # v3.4 DIAGNOSTIC: Print pyramid error details
                         print(f"   ❌ PYRAMID GENERATION FAILED", flush=True)
                         print(f"      Error Type: {type(pyramid_error).__name__}", flush=True)
                         print(f"      Error Message: {str(pyramid_error)}", flush=True)
+                        print(f"      Error Category: {error_info['error_category']}", flush=True)
+                        print(f"      Suggested Action: {error_info['suggested_action']}", flush=True)
                         sys.stdout.flush()
 
-                        logger.error(f"Pyramid slide generation failed: {pyramid_error}")
+                        logger.error(
+                            f"Pyramid slide generation failed: {pyramid_error}",
+                            extra={
+                                "slide_id": slide.slide_id,
+                                "error_category": error_info["error_category"]
+                            }
+                        )
+
                         failed_slides.append({
                             "slide_number": slide_number,
                             "slide_id": slide.slide_id,
                             "slide_type": slide.slide_type_classification,
                             "error": str(pyramid_error),
-                            "endpoint": "/v1.0/pyramid/generate"
+                            # Service context
+                            "service": "illustrator_v1.0",
+                            "endpoint": "/v1.0/pyramid/generate",
+                            # Error classification
+                            "error_type": error_info["error_type"],
+                            "error_category": error_info["error_category"],
+                            "suggested_action": error_info["suggested_action"],
+                            "http_status": error_info["http_status"]
                         })
 
                     continue  # Skip content slide processing
@@ -526,20 +819,40 @@ class ServiceRouterV1_2:
                         )
 
                     except Exception as hero_error:
+                        # Tier 1: Classify error for debugging
+                        error_info = self._classify_error(hero_error, response=hero_response if 'hero_response' in locals() else None)
+
                         # v3.4 DIAGNOSTIC: Print hero error details
                         print(f"   ❌ HERO ENDPOINT FAILED", flush=True)
                         print(f"      Error Type: {type(hero_error).__name__}", flush=True)
                         print(f"      Error Message: {str(hero_error)}", flush=True)
                         print(f"      Endpoint: {hero_request_data.get('endpoint', 'unknown')}", flush=True)
+                        print(f"      Error Category: {error_info['error_category']}", flush=True)
+                        print(f"      Suggested Action: {error_info['suggested_action']}", flush=True)
                         sys.stdout.flush()
 
-                        logger.error(f"Hero slide generation failed: {hero_error}")
+                        logger.error(
+                            f"Hero slide generation failed: {hero_error}",
+                            extra={
+                                "slide_id": slide.slide_id,
+                                "endpoint": hero_request_data.get("endpoint", "unknown"),
+                                "error_category": error_info["error_category"]
+                            }
+                        )
+
                         failed_slides.append({
                             "slide_number": slide_number,
                             "slide_id": slide.slide_id,
                             "slide_type": slide.slide_type_classification,
                             "error": str(hero_error),
-                            "endpoint": hero_request_data.get("endpoint", "unknown")
+                            # Service context
+                            "service": "text_service_v1.2",
+                            "endpoint": hero_request_data.get("endpoint", "unknown"),
+                            # Error classification
+                            "error_type": error_info["error_type"],
+                            "error_category": error_info["error_category"],
+                            "suggested_action": error_info["suggested_action"],
+                            "http_status": error_info["http_status"]
                         })
 
                     continue  # Skip content slide processing
@@ -590,21 +903,44 @@ class ServiceRouterV1_2:
                 logger.info(f"✅ Slide {slide_number} generated successfully ({duration:.2f}s)")
 
             except Exception as e:
+                # Tier 1: Classify error for debugging
+                error_info = self._classify_error(e, response=generated if 'generated' in locals() else None)
+
                 # v3.4 DIAGNOSTIC: Print content slide error details
                 print(f"   ❌ CONTENT SLIDE GENERATION FAILED", flush=True)
                 print(f"      Error Type: {type(e).__name__}", flush=True)
                 print(f"      Error Message: {str(e)}", flush=True)
                 print(f"      Variant ID: {slide.variant_id}", flush=True)
+                print(f"      Error Category: {error_info['error_category']}", flush=True)
+                print(f"      Suggested Action: {error_info['suggested_action']}", flush=True)
                 import traceback
                 print(f"      Traceback: {traceback.format_exc()}", flush=True)
                 sys.stdout.flush()
 
-                logger.error(f"❌ Slide {slide_number} generation failed: {e}")
+                logger.error(
+                    f"❌ Slide {slide_number} generation failed: {e}",
+                    extra={
+                        "slide_id": slide.slide_id,
+                        "variant_id": slide.variant_id,
+                        "error_category": error_info["error_category"]
+                    }
+                )
+
                 failed_slides.append({
                     "slide_number": slide_number,
                     "slide_id": slide.slide_id,
                     "variant_id": slide.variant_id,
-                    "error": str(e)
+                    "error": str(e),
+                    # Tier 1 debugging: Service context
+                    "service": "text_service_v1.2",
+                    "endpoint": "/v1.2/generate",  # Content slide endpoint
+                    "slide_type": slide.slide_type_classification,
+                    "layout": slide.layout_id,
+                    # Error classification
+                    "error_type": error_info["error_type"],
+                    "error_category": error_info["error_category"],
+                    "suggested_action": error_info["suggested_action"],
+                    "http_status": error_info["http_status"]
                 })
 
         metadata = {
@@ -619,11 +955,45 @@ class ServiceRouterV1_2:
             )
         }
 
+        # Tier 2: Generate comprehensive error summary for debugging
+        error_summary = self._generate_error_summary(failed_slides)
+
+        # Print error summary to Railway logs for customer support
+        if error_summary["total_failures"] > 0:
+            print("\n" + "="*80, flush=True)
+            print("📊 ERROR SUMMARY (Tier 2 Debugging)", flush=True)
+            print("="*80, flush=True)
+            print(f"Total Failures: {error_summary['total_failures']}", flush=True)
+            print(f"\nBy Category:", flush=True)
+            for category, count in error_summary["by_category"].items():
+                print(f"  • {category}: {count}", flush=True)
+            print(f"\nBy Service:", flush=True)
+            for service, count in error_summary["by_service"].items():
+                print(f"  • {service}: {count}", flush=True)
+            if error_summary["by_endpoint"]:
+                print(f"\nBy Endpoint:", flush=True)
+                for endpoint, count in error_summary["by_endpoint"].items():
+                    print(f"  • {endpoint}: {count}", flush=True)
+            if error_summary["critical_issues"]:
+                print(f"\n🚨 Critical Issues:", flush=True)
+                for issue in error_summary["critical_issues"]:
+                    print(f"  [{issue['severity'].upper()}] {issue['issue']} ({issue['count']} slides)", flush=True)
+                    print(f"    Impact: {issue['impact']}", flush=True)
+                    print(f"    Action: {issue['action']}", flush=True)
+            if error_summary["recommended_actions"]:
+                print(f"\n💡 Recommended Actions (Priority Order):", flush=True)
+                for action in error_summary["recommended_actions"]:
+                    print(f"  {action['priority']}. {action['action']}", flush=True)
+                    print(f"     Rationale: {action['rationale']}", flush=True)
+            print("="*80 + "\n", flush=True)
+            sys.stdout.flush()
+
         return {
             "generated_slides": generated_slides,
             "failed_slides": failed_slides,
             "skipped_slides": skipped_slides,
-            "metadata": metadata
+            "metadata": metadata,
+            "error_summary": error_summary  # Tier 2: Include error summary for debugging
         }
 
     def _is_hero_slide(self, slide: Slide) -> bool:
