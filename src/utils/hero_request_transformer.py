@@ -46,14 +46,21 @@ class HeroRequestTransformer:
 
     Handles mapping from Director's internal slide representation to the
     hero endpoint request format expected by Text Service v1.2.
+
+    v3.5 UPDATE: Supports -with-image endpoints and visual_style parameter.
+    Routes to /hero/{type}-with-image when slide.use_image_background=True.
     """
 
-    # Map slide classifications to hero endpoint paths
-    CLASSIFICATION_TO_ENDPOINT = {
+    # v3.5: Map slide classifications to base endpoint names
+    # Endpoint variant (-with-image or regular) determined by use_image_background flag
+    CLASSIFICATION_TO_BASE_ENDPOINT = {
         "title_slide": "title",
         "section_divider": "section",
         "closing_slide": "closing"
     }
+
+    # v3.0: Keep old name for backward compatibility
+    CLASSIFICATION_TO_ENDPOINT = CLASSIFICATION_TO_BASE_ENDPOINT
 
     def __init__(self):
         """Initialize transformer."""
@@ -99,14 +106,22 @@ class HeroRequestTransformer:
         if not self.is_hero_slide(classification):
             raise ValueError(
                 f"Not a hero slide: {classification}. "
-                f"Expected one of: {list(self.CLASSIFICATION_TO_ENDPOINT.keys())}"
+                f"Expected one of: {list(self.CLASSIFICATION_TO_BASE_ENDPOINT.keys())}"
             )
 
-        # Get hero endpoint type
-        hero_type = self.CLASSIFICATION_TO_ENDPOINT[classification]
-        endpoint = f"/v1.2/hero/{hero_type}"
+        # Get base endpoint name
+        base_endpoint = self.CLASSIFICATION_TO_BASE_ENDPOINT[classification]
 
-        logger.info(f"Transforming slide #{slide.slide_number} ({classification}) to {endpoint}")
+        # v3.5: Determine endpoint variant based on use_image_background flag
+        if slide.use_image_background:
+            endpoint = f"/v1.2/hero/{base_endpoint}-with-image"
+        else:
+            endpoint = f"/v1.2/hero/{base_endpoint}"
+
+        logger.info(
+            f"Transforming slide #{slide.slide_number} ({classification}) to {endpoint} "
+            f"(use_image: {slide.use_image_background}, visual_style: {slide.visual_style})"
+        )
 
         # Build context from strawman and slide
         context = self._build_context(slide, strawman)
@@ -119,6 +134,11 @@ class HeroRequestTransformer:
             "topics": self._extract_topics(slide),
             "context": context
         }
+
+        # v3.5: Add visual_style parameter for -with-image endpoints
+        if slide.use_image_background and slide.visual_style:
+            payload["visual_style"] = slide.visual_style
+            logger.debug(f"Added visual_style='{slide.visual_style}' to payload")
 
         logger.debug(f"Hero request payload: {payload}")
 

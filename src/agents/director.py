@@ -25,6 +25,8 @@ from src.utils.asset_formatter import AssetFormatter
 # v3.4-v1.2: Text Service v1.2 integration
 from src.utils.variant_catalog import VariantCatalog
 from src.utils.variant_selector import VariantSelector
+# v3.5-visual-styles: Visual style assignment for hero slides
+from src.utils.visual_style_assigner import VisualStyleAssigner
 # v2.0: Deck-builder integration
 # v3.2: LayoutMapper removed - replaced by LayoutSchemaManager
 from src.utils.layout_schema_manager import LayoutSchemaManager  # v3.2: Schema-driven architecture
@@ -482,6 +484,16 @@ class DirectorAgent:
                             f"for slide {slide.slide_number} (reason: consecutive limit)"
                         )
 
+                    # v3.8.0: Select chart_id for analytics slides (REQUIRED for synthetic data)
+                    if slide_type_classification == "analytics":
+                        # For now, use "line" as default chart type
+                        # TODO: Enhance with AI-based chart type selection based on narrative/keywords
+                        # (e.g., "geographic" → d3_choropleth_usa, "flow" → d3_sankey, etc.)
+                        slide.chart_id = "line"
+                        logger.info(
+                            f"📊 Analytics slide {slide.slide_number}: assigned chart_id='line' (default)"
+                        )
+
                     # v3.4: Generate content guidance for specialized text generators
                     content_guidance = self._generate_content_guidance(
                         slide=slide,
@@ -538,6 +550,28 @@ class DirectorAgent:
                         semantic_group=semantic_group,
                         slide_number=slide.slide_number
                     )
+
+                    # v3.5-visual-styles: Assign visual style for hero slides
+                    if slide.layout_id == "L29":  # Hero slides only
+                        # Initialize visual style assigner (uses strawman-level preferences if available)
+                        visual_style_assigner = VisualStyleAssigner(
+                            user_preferences=None  # Could be populated from strawman.visual_style_preference
+                        )
+
+                        # Assign visual style and image background flag
+                        style_assignment = visual_style_assigner.assign_visual_style(
+                            slide=slide,
+                            strawman=strawman
+                        )
+
+                        slide.visual_style = style_assignment.visual_style
+                        slide.use_image_background = style_assignment.use_image_background
+
+                        logger.info(
+                            f"Slide {slide.slide_number} ({slide_type_classification}): "
+                            f"visual_style={slide.visual_style}, use_image={slide.use_image_background} | "
+                            f"{style_assignment.assignment_reason}"
+                        )
 
                     # v3.4-v1.2: Generate slide title with LLM (50 char limit) + retry logic
                     try:

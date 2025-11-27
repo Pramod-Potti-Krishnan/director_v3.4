@@ -231,41 +231,68 @@ class ServiceRouterV1_2:
                         continue
 
                     try:
-                        # Determine analytics type and layout from slide
-                        analytics_type = getattr(slide, 'analytics_type', None) or "revenue_over_time"
-                        layout = getattr(slide, 'layout_id', None) or "L02"
-                        data = getattr(slide, 'analytics_data', None) or []
+                        # v3.8.0: Extract chart_type from slide.chart_id (REQUIRED for synthetic data)
+                        chart_type = getattr(slide, 'chart_id', None)
+                        if not chart_type:
+                            logger.warning(f"Analytics slide {slide.slide_id} missing chart_id, defaulting to 'line'")
+                            chart_type = "line"
 
-                        # Validate data
-                        if not data:
-                            logger.warning(f"Analytics slide {slide.slide_id} has no data, using placeholder")
-                            data = [
-                                {"label": "Q1", "value": 100},
-                                {"label": "Q2", "value": 120},
-                                {"label": "Q3", "value": 150},
-                                {"label": "Q4", "value": 180}
-                            ]
+                        # Map chart_type to analytics_endpoint using chart_type_mappings
+                        # This mapping is from config/analytics_variants.json
+                        chart_type_mappings = {
+                            "line": "revenue_over_time",
+                            "bar_vertical": "quarterly_comparison",
+                            "bar_horizontal": "category_ranking",
+                            "pie": "market_share",
+                            "doughnut": "market_share",
+                            "scatter": "correlation_analysis",
+                            "bubble": "multidimensional_analysis",
+                            "radar": "multi_metric_comparison",
+                            "polar_area": "radial_composition",
+                            "area": "revenue_over_time",
+                            "bar_grouped": "quarterly_comparison",
+                            "bar_stacked": "quarterly_comparison",
+                            "area_stacked": "revenue_over_time",
+                            "mixed": "kpi_metrics",
+                            "d3_treemap": "market_share",
+                            "d3_sunburst": "market_share",
+                            "d3_choropleth_usa": "market_share",
+                            "d3_sankey": "market_share"
+                        }
+                        analytics_type = chart_type_mappings.get(chart_type, "revenue_over_time")
+
+                        # Get layout from slide
+                        layout = getattr(slide, 'layout_id', None) or "L02"
+
+                        # v3.8.0: Data is now OPTIONAL - Analytics Service can generate synthetic data
+                        data = getattr(slide, 'analytics_data', None)
+
+                        # Determine data strategy
+                        data_strategy = "director_data" if (data and len(data) > 0) else "synthetic_data"
 
                         # v3.4 DIAGNOSTIC: Print analytics generation details
                         print(f"   📊 CALLING ANALYTICS SERVICE /api/v1/analytics/{layout}/{analytics_type}", flush=True)
                         print(f"      Topic: {slide.generated_title}", flush=True)
+                        print(f"      Chart Type: {chart_type} (v3.8.0)", flush=True)
                         print(f"      Analytics Type: {analytics_type}", flush=True)
                         print(f"      Layout: {layout}", flush=True)
-                        print(f"      Data Points: {len(data)}", flush=True)
+                        print(f"      Data Strategy: {data_strategy}", flush=True)
+                        print(f"      Data Points: {len(data) if data else 0} (will use synthetic if 0)", flush=True)
                         sys.stdout.flush()
 
-                        # Call Analytics Service to generate chart
+                        # v3.8.0: Call Analytics Service with chart_type and optional data
                         start = datetime.utcnow()
                         analytics_response = await self.analytics_client.generate_chart(
                             analytics_type=analytics_type,
                             layout=layout,
-                            data=data,
+                            chart_type=chart_type,  # v3.8.0: REQUIRED for synthetic data generation
                             narrative=slide.narrative or slide.generated_title,
                             context={
                                 "presentation_title": strawman.main_title,
                                 "tone": strawman.overall_theme or "professional",
                                 "audience": strawman.target_audience or "general"
                             },
+                            data=data if (data and len(data) > 0) else None,  # v3.8.0: OPTIONAL - None triggers synthetic
                             presentation_id=getattr(strawman, 'preview_presentation_id', None),
                             slide_id=slide.slide_id,
                             slide_number=slide_number
@@ -275,8 +302,11 @@ class ServiceRouterV1_2:
                         # v3.4 DIAGNOSTIC: Print analytics response
                         print(f"   ✅ Analytics Service returned in {duration:.2f}s", flush=True)
                         content = analytics_response.get('content', {})
+                        metadata = analytics_response.get('metadata', {})
+                        synthetic_used = metadata.get('synthetic_data_used', False)
                         print(f"      Chart HTML length: {len(content.get('element_3', ''))} chars", flush=True)
                         print(f"      Observations length: {len(content.get('element_2', ''))} chars", flush=True)
+                        print(f"      Synthetic Data Used: {synthetic_used} (v3.8.0)", flush=True)
                         sys.stdout.flush()
                         total_generation_time += duration
 
@@ -286,11 +316,13 @@ class ServiceRouterV1_2:
                             "slide_id": slide.slide_id,
                             "content": content,  # Dict with element_3 and element_2 for L02
                             "metadata": {
-                                **analytics_response.get("metadata", {}),
+                                **metadata,
                                 "service": "analytics_v3",
                                 "slide_type": "analytics",
                                 "analytics_type": analytics_type,
-                                "layout": layout
+                                "chart_type": chart_type,  # v3.8.0: Include chart_type
+                                "layout": layout,
+                                "data_strategy": data_strategy  # v3.8.0: Track data strategy
                             },
                             "generation_time_ms": int(duration * 1000),
                             "endpoint_used": f"/api/v1/analytics/{layout}/{analytics_type}",
@@ -303,7 +335,10 @@ class ServiceRouterV1_2:
                             extra={
                                 "slide_id": slide.slide_id,
                                 "analytics_type": analytics_type,
+                                "chart_type": chart_type,  # v3.8.0: Include chart_type
                                 "layout": layout,
+                                "data_strategy": data_strategy,  # v3.8.0: Track data strategy
+                                "synthetic_data_used": synthetic_used,  # v3.8.0: Track synthetic usage
                                 "generation_time_seconds": duration
                             }
                         )
@@ -436,9 +471,11 @@ class ServiceRouterV1_2:
 
                 if is_hero:
                     # NEW v3.4: Generate hero slides using hero endpoints
+                    # v3.5: Enhanced logging with visual style information
                     logger.info(
                         f"🎬 Generating hero slide {slide_number}/{len(slides)}: "
-                        f"{slide.slide_id} (type: {slide.slide_type_classification})"
+                        f"{slide.slide_id} (type: {slide.slide_type_classification}) "
+                        f"[use_image: {slide.use_image_background}, style: {slide.visual_style}]"
                     )
 
                     try:
@@ -448,8 +485,11 @@ class ServiceRouterV1_2:
                         )
 
                         # v3.4 DIAGNOSTIC: Print hero endpoint call details
+                        # v3.5: Include visual style information
                         print(f"   🎬 CALLING HERO ENDPOINT", flush=True)
                         print(f"      Endpoint: {hero_request_data['endpoint']}", flush=True)
+                        print(f"      Use Image: {slide.use_image_background}", flush=True)
+                        print(f"      Visual Style: {slide.visual_style}", flush=True)
                         print(f"      Payload keys: {list(hero_request_data['payload'].keys())}", flush=True)
                         sys.stdout.flush()
 

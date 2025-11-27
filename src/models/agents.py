@@ -154,7 +154,16 @@ class Slide(BaseModel):
         description="Chart data points for Analytics Service. "
                     "List of dicts with keys like 'label', 'value', etc. "
                     "Example: [{'label': 'Q1', 'value': 100}, {'label': 'Q2', 'value': 120}]. "
-                    "If not provided, Analytics Service generates placeholder data."
+                    "v3.8.0: Data is now OPTIONAL - Analytics Service can generate synthetic data if not provided."
+    )
+    chart_id: Optional[str] = Field(
+        default=None,
+        description="Specific chart type to use for analytics visualization (v3.8.0). "
+                    "18 chart types supported: 14 Chart.js (line, bar_vertical, bar_horizontal, pie, doughnut, "
+                    "scatter, bubble, radar, polar_area, area, bar_grouped, bar_stacked, area_stacked, mixed) "
+                    "+ 4 D3.js (d3_treemap, d3_sunburst, d3_choropleth_usa, d3_sankey). "
+                    "REQUIRED for analytics slides to enable synthetic data generation. "
+                    "Director AI selects based on content pattern and narrative."
     )
 
     # v3.1: Pre-selected layout ID (assigned during GENERATE_STRAWMAN)
@@ -191,6 +200,27 @@ class Slide(BaseModel):
         max_length=90,
         description="Director-generated slide subtitle (max 90 chars). "
                     "Used as subtitle in Layout Builder L25 slides."
+    )
+
+    # v3.5-visual-styles: Visual style configuration for hero slides
+    visual_style: Optional[Literal["professional", "illustrated", "kids"]] = Field(
+        default=None,
+        description=(
+            "Visual style for hero slide images. Only applicable to hero slides (L29). "
+            "Options: professional (photorealistic), illustrated (Ghibli-style), kids (vibrant/playful). "
+            "Assigned in GENERATE_STRAWMAN based on user preference or AI defaults. "
+            "Passed to Text Service v1.2 /hero/*-with-image endpoints."
+        )
+    )
+    use_image_background: bool = Field(
+        default=False,
+        description=(
+            "Whether to use AI-generated image background for hero slides. "
+            "Title slides: ALWAYS True (user requirement). "
+            "Section slides: Only for decks >10 slides AND (user request OR creative theme). "
+            "Closing slides: Based on preference (default: True for memorable impact). "
+            "Determines routing to /hero/*-with-image vs /hero/* endpoints."
+        )
     )
 
     # Core content
@@ -274,6 +304,28 @@ class PresentationStrawman(BaseModel):
     preview_presentation_id: Optional[str] = Field(
         default=None,
         description="Deck-builder presentation ID for preview"
+    )
+
+    # v3.5-visual-styles: User visual style preferences from Stage 2
+    visual_style_preference: Optional[Literal["professional", "illustrated", "kids"]] = Field(
+        default=None,
+        description=(
+            "User's preferred visual style from Stage 2 clarifying questions. "
+            "Options: professional (default), illustrated (Ghibli-style), kids (bright/playful). "
+            "If None, AI assigns appropriate style based on audience and theme."
+        )
+    )
+    use_images_for_sections: bool = Field(
+        default=False,
+        description=(
+            "Whether to use images for section divider slides (user preference). "
+            "Note: Section dividers not needed in small decks (≤10 slides). "
+            "For decks >10 slides, AI may enable for creative themes even if False."
+        )
+    )
+    use_images_for_closing: bool = Field(
+        default=True,
+        description="Whether to use images for closing slide (default: True for memorable impact)"
     )
 
     # Computed properties

@@ -17,3 +17,27 @@
   ]
 }
 ```
+
+## v3.5: Optional Visual Style Question
+
+**NEW FEATURE:** You may optionally ask about visual style preferences for hero slides (title, section dividers, closing).
+
+**When to ask:**
+- If the presentation is creative, storytelling-focused, or for children
+- If the user seems interested in visual customization
+- Only ask if you have room in your 3-5 question limit
+
+**Visual Style Question (Optional):**
+```
+"What visual style would you like for your presentation's hero slides (title, sections, closing)?
+  • Professional (default): Modern, photorealistic backgrounds - best for business/corporate
+  • Illustrated: Artistic, Ghibli-style anime illustrations - best for creative/storytelling
+  • Kids: Bright, vibrant, playful backgrounds - best for children's content
+
+  Or just say 'let AI decide' and I'll choose based on your audience and theme."
+```
+
+**Notes:**
+- Title slides will ALWAYS use image backgrounds (for maximum impact)
+- Section dividers only use images in presentations >10 slides OR for creative themes
+- If user doesn't specify, AI will automatically assign appropriate visual style based on audience
