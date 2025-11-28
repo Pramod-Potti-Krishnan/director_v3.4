@@ -597,9 +597,12 @@ class WebSocketHandler:
                 print(f"   Intent: {intent.intent_type} (confidence: {intent.confidence})", flush=True)
                 print(f"   User input: {user_input[:100] if len(user_input) <= 100 else user_input[:100] + '...'}", flush=True)
                 print("="*80, flush=True)
+                print(f"🔵 DEBUG: About to call update_state({session.id}, {self.current_user_id}, {next_state})", flush=True)
                 sys.stdout.flush()
                 await self.sessions.update_state(session.id, self.current_user_id, next_state)
+                print(f"✅ DEBUG: update_state completed, updating in-memory state", flush=True)
                 session.current_state = next_state
+                print(f"✅ DEBUG: In-memory state updated to {session.current_state}", flush=True)
 
             # STEP 4: Build state context
             state_context = StateContext(

@@ -40,9 +40,12 @@ class SessionManager:
         # Check cache first
         cache_key = f"{user_id}:{session_id}"
         if cache_key in self.cache:
+            cached_session = self.cache[cache_key]
             print(f"[DEBUG SessionManager] Found in cache: {cache_key}")
+            print(f"[DEBUG SessionManager] ⚠️ CACHE HIT - Returning cached state: {cached_session.current_state}")
             logger.debug(f"Returning cached session {session_id} for user {user_id}")
-            return self.cache[cache_key]
+            logger.info(f"🔍 DEBUG: Cache hit for {session_id}, state={cached_session.current_state}")
+            return cached_session
         
         # Try to fetch from Supabase
         print("[DEBUG SessionManager] Checking Supabase for existing session")
@@ -54,15 +57,19 @@ class SessionManager:
                 # Session exists
                 session_data = result.data[0]
                 logger.debug(f"Session data from DB: {session_data}")
+                print(f"[DEBUG SessionManager] ✅ FOUND IN SUPABASE - State from DB: {session_data.get('current_state')}")
+                print(f"[DEBUG SessionManager] Full session data: {session_data}")
                 session = Session(**session_data)
                 self.cache[cache_key] = session
                 logger.info(f"Retrieved existing session {session_id} for user {user_id}")
+                logger.info(f"🔍 DEBUG: Loaded from Supabase - state={session.current_state}, history_length={len(session.conversation_history)}")
                 logger.debug(f"Session user_initial_request: {session.user_initial_request}")
                 return session
         except Exception as e:
             logger.warning(f"Error fetching session {session_id}: {str(e)}")
         
         # Create new session
+        print(f"[DEBUG SessionManager] ❌ NOT FOUND - Creating new session with state=PROVIDE_GREETING")
         session = Session(
             id=session_id,
             user_id=user_id,
@@ -76,16 +83,17 @@ class SessionManager:
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
-        
+
         # Save to Supabase
         try:
             # Convert datetime to ISO format for JSON serialization
             session_data = session.dict()
             session_data['created_at'] = session.created_at.isoformat()
             session_data['updated_at'] = session.updated_at.isoformat()
-            
+
             result = self.supabase.table(self.table_name).insert(session_data).execute()
             logger.info(f"Created new session {session_id} for user {user_id}")
+            logger.info(f"🔍 DEBUG: Created NEW session in Supabase - state=PROVIDE_GREETING")
         except Exception as e:
             logger.error(f"Error creating session in Supabase: {str(e)}")
             # Continue with local session even if Supabase fails
@@ -96,28 +104,34 @@ class SessionManager:
     async def update_state(self, session_id: str, user_id: str, state: str):
         """
         Update session state.
-        
+
         Args:
             session_id: Session ID
             user_id: User ID
             state: New state
         """
+        print(f"[DEBUG SessionManager] 🔵 update_state CALLED - session_id={session_id}, new_state={state}")
         session = await self.get_or_create(session_id, user_id)
+        old_state = session.current_state
         session.current_state = state
         session.updated_at = datetime.utcnow()
-        
+        print(f"[DEBUG SessionManager] State transition: {old_state} → {state}")
+
         # Update in Supabase
         try:
-            self.supabase.table(self.table_name).update({
+            print(f"[DEBUG SessionManager] 💾 Attempting Supabase UPDATE...")
+            result = self.supabase.table(self.table_name).update({
                 'current_state': state,
                 'updated_at': session.updated_at.isoformat()
             }).eq('id', session_id).eq('user_id', user_id).execute()
+            print(f"[DEBUG SessionManager] ✅ Supabase UPDATE successful - result: {result}")
             logger.info(f"Updated session {session_id} state to {state}")
             logger.info(f"✅ State persisted to Supabase: {state} for session {session_id}")
 
             # Force refresh from database to ensure cache consistency
             cache_key = f"{user_id}:{session_id}"
             if cache_key in self.cache:
+                print(f"[DEBUG SessionManager] 🗑️ Clearing cache for {cache_key}")
                 del self.cache[cache_key]
                 logger.debug(f"Cleared cache for session {session_id} after state update")
                 
