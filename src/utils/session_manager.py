@@ -113,7 +113,8 @@ class SessionManager:
                 'updated_at': session.updated_at.isoformat()
             }).eq('id', session_id).eq('user_id', user_id).execute()
             logger.info(f"Updated session {session_id} state to {state}")
-            
+            logger.info(f"✅ State persisted to Supabase: {state} for session {session_id}")
+
             # Force refresh from database to ensure cache consistency
             cache_key = f"{user_id}:{session_id}"
             if cache_key in self.cache:
@@ -168,8 +169,9 @@ class SessionManager:
         session.presentation_strawman = None
         session.refinement_feedback = None
         session.conversation_history = []  # Clear history for fresh start
+        session.current_state = "ASK_CLARIFYING_QUESTIONS"  # Reset state for topic change
         session.updated_at = datetime.utcnow()
-        
+
         # Update in Supabase
         try:
             self.supabase.table(self.table_name).update({
@@ -179,9 +181,10 @@ class SessionManager:
                 'presentation_strawman': None,
                 'refinement_feedback': None,
                 'conversation_history': [],
+                'current_state': 'ASK_CLARIFYING_QUESTIONS',  # Reset state in DB
                 'updated_at': session.updated_at.isoformat()
             }).eq('id', session_id).eq('user_id', user_id).execute()
-            logger.info(f"Cleared context for session {session_id}")
+            logger.info(f"Cleared context for session {session_id} and reset state to ASK_CLARIFYING_QUESTIONS")
         except Exception as e:
             logger.error(f"Error clearing session context: {str(e)}")
     

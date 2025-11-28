@@ -179,13 +179,14 @@ class WebSocketHandler:
             try:
                 session = await self.sessions.get_or_create(session_id, user_id)
                 logger.info(f"Session {session_id} initialized for user {user_id} with state: {session.current_state}")
+                logger.info(f"🔌 Reconnection: session_id={session_id}, user_id={user_id}, loaded_state={session.current_state}")
             except Exception as session_error:
                 logger.error(f"Failed to create/get session {session_id} for user {user_id}: {str(session_error)}", exc_info=True)
                 raise
 
             # Send initial greeting if new session, otherwise restore conversation history
             if session.current_state == "PROVIDE_GREETING":
-                logger.info(f"Session {session_id} is new, sending greeting")
+                logger.info(f"New session - sending greeting (state: {session.current_state})")
                 try:
                     await self._send_greeting(websocket, session)
                     logger.info(f"Greeting sent successfully for session {session_id}")
@@ -193,7 +194,8 @@ class WebSocketHandler:
                     logger.error(f"Failed to send greeting for session {session_id}: {str(greeting_error)}", exc_info=True)
                     raise
             else:
-                logger.info(f"Restoring conversation history for session {session_id} (state: {session.current_state})")
+                logger.info(f"Existing session - restoring history (state: {session.current_state})")
+                logger.info(f"✅ Restoring conversation history for session {session_id} (state: {session.current_state})")
                 try:
                     await self._restore_conversation_history(websocket, session)
                     logger.info(f"Conversation history restored successfully for session {session_id}")
@@ -543,6 +545,12 @@ class WebSocketHandler:
             if intent.intent_type == "Change_Topic":
                 # Clear context and reset to questions
                 await self.sessions.clear_context(session.id, self.current_user_id)
+                # FIX: Persist state to Supabase before continuing
+                await self.sessions.update_state(
+                    session.id,
+                    self.current_user_id,
+                    "ASK_CLARIFYING_QUESTIONS"
+                )
                 session = await self.sessions.get_or_create(session.id, self.current_user_id)
                 session.current_state = "ASK_CLARIFYING_QUESTIONS"
                 session.user_initial_request = intent.extracted_info or user_input
