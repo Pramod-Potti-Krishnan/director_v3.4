@@ -16,7 +16,7 @@ from src.utils.message_packager import MessagePackager
 from src.utils.streamlined_packager import StreamlinedMessagePackager
 from src.storage.supabase import get_supabase_client
 from src.models.agents import UserIntent, StateContext
-from src.models.websocket_messages import StreamlinedMessage
+from src.models.websocket_messages import StreamlinedMessage, create_chat_message
 from src.workflows.state_machine import WorkflowOrchestrator
 from config.settings import get_settings
 
@@ -183,7 +183,7 @@ class WebSocketHandler:
                 logger.error(f"Failed to create/get session {session_id} for user {user_id}: {str(session_error)}", exc_info=True)
                 raise
 
-            # Send initial greeting if new session
+            # Send initial greeting if new session, otherwise restore conversation history
             if session.current_state == "PROVIDE_GREETING":
                 logger.info(f"Session {session_id} is new, sending greeting")
                 try:
@@ -193,7 +193,13 @@ class WebSocketHandler:
                     logger.error(f"Failed to send greeting for session {session_id}: {str(greeting_error)}", exc_info=True)
                     raise
             else:
-                logger.info(f"Session {session_id} already in state: {session.current_state}, no greeting needed")
+                logger.info(f"Restoring conversation history for session {session_id} (state: {session.current_state})")
+                try:
+                    await self._restore_conversation_history(websocket, session)
+                    logger.info(f"Conversation history restored successfully for session {session_id}")
+                except Exception as restore_error:
+                    logger.error(f"Failed to restore conversation history for session {session_id}: {str(restore_error)}", exc_info=True)
+                    # Don't raise - allow user to continue even if restoration fails
 
             # Main message loop
             logger.info(f"Entering message loop for session {session_id}")
@@ -287,6 +293,179 @@ class WebSocketHandler:
         except Exception as e:
             logger.error(f"Error sending greeting: {str(e)}", exc_info=True)
             raise
+
+    async def _restore_conversation_history(self, websocket: WebSocket, session: Any):
+        """
+        Restore conversation history for existing sessions on reconnection.
+
+        When users reconnect to an existing session (browser refresh, loading from history),
+        this method reconstructs and sends all past messages to the frontend so they see
+        the full conversation context.
+
+        Args:
+            websocket: WebSocket connection
+            session: Session object with conversation_history and current state
+        """
+        logger.info(f"📊 Restoring {len(session.conversation_history)} history items for session {session.id}")
+
+        use_streamlined = self._should_use_streamlined(session.id)
+
+        if not use_streamlined:
+            logger.warning("Legacy protocol not supported for history restoration")
+            return
+
+        all_messages = []
+
+        # Iterate through conversation history to reconstruct messages
+        for idx, history_item in enumerate(session.conversation_history):
+            role = history_item.get('role')
+            content = history_item.get('content')
+            state = history_item.get('state')  # Only for assistant messages
+
+            if role == 'user':
+                # Reconstruct user message as simple chat_message
+                all_messages.append(
+                    create_chat_message(
+                        session_id=session.id,
+                        text=content,  # Raw user text
+                        format="plain"
+                    )
+                )
+
+            elif role == 'assistant':
+                # Reconstruct assistant messages based on state
+                reconstructed = await self._reconstruct_assistant_message(
+                    session=session,
+                    state=state,
+                    content=content,
+                    history_idx=idx
+                )
+                if reconstructed:
+                    all_messages.extend(reconstructed)
+
+        # Send all reconstructed messages
+        if all_messages:
+            logger.info(f"✅ Sending {len(all_messages)} reconstructed messages to frontend")
+            logger.info(f"📊 Restoration stats - Current state: {session.current_state}, Has strawman: {bool(session.presentation_strawman)}, Has final URL: {bool(session.presentation_url)}")
+            await self._send_messages(websocket, all_messages)
+        else:
+            logger.warning(f"⚠️ No messages reconstructed for session {session.id}")
+
+    async def _reconstruct_assistant_message(
+        self,
+        session: Any,
+        state: str,
+        content: Any,
+        history_idx: int
+    ) -> List[StreamlinedMessage]:
+        """
+        Reconstruct assistant message from history item.
+
+        Uses existing streamlined_packager methods to convert stored history
+        into proper StreamlinedMessages for frontend display.
+
+        Args:
+            session: Session object (for accessing current strawman/URL)
+            state: State when message was created
+            content: Message content (varies by state - dict or Pydantic object)
+            history_idx: Index in conversation history (for debugging/logging)
+
+        Returns:
+            List of StreamlinedMessages to send (empty list if reconstruction fails)
+        """
+        try:
+            # Import models at runtime to avoid circular imports
+            from src.models.agents import (
+                ClarifyingQuestions,
+                ConfirmationPlan,
+                PresentationStrawman
+            )
+
+            if state == "PROVIDE_GREETING":
+                # Static greeting - no agent_output needed
+                return self.streamlined_packager.package_messages(
+                    session_id=session.id,
+                    state="PROVIDE_GREETING",
+                    agent_output=None,
+                    context=None
+                )
+
+            elif state == "ASK_CLARIFYING_QUESTIONS":
+                # Reconstruct from ClarifyingQuestions object in history
+                if isinstance(content, dict) and 'questions' in content:
+                    questions = ClarifyingQuestions(**content)
+                    return self.streamlined_packager.package_messages(
+                        session_id=session.id,
+                        state="ASK_CLARIFYING_QUESTIONS",
+                        agent_output=questions,
+                        context=None
+                    )
+                else:
+                    logger.warning(f"Invalid questions format in history[{history_idx}]")
+                    return []
+
+            elif state == "CREATE_CONFIRMATION_PLAN":
+                # Reconstruct from ConfirmationPlan object in history
+                if isinstance(content, dict):
+                    plan = ConfirmationPlan(**content)
+                    return self.streamlined_packager.package_messages(
+                        session_id=session.id,
+                        state="CREATE_CONFIRMATION_PLAN",
+                        agent_output=plan,
+                        context=None
+                    )
+                else:
+                    logger.warning(f"Invalid plan format in history[{history_idx}]")
+                    return []
+
+            elif state in ["GENERATE_STRAWMAN", "REFINE_STRAWMAN"]:
+                # ⚠️ CRITICAL: Always use session.presentation_strawman (current version)
+                # NOT history content! This ensures we get the latest preview_url
+                if session.presentation_strawman:
+                    strawman = PresentationStrawman(**session.presentation_strawman)
+                    return self.streamlined_packager.package_messages(
+                        session_id=session.id,
+                        state=state,
+                        agent_output=strawman,
+                        context=None
+                    )
+                else:
+                    logger.warning(f"No strawman in session for history[{history_idx}]")
+                    return []
+
+            elif state == "CONTENT_GENERATION":
+                # Reconstruct presentation URL message
+                if isinstance(content, dict) and content.get("type") == "presentation_url":
+                    return self.streamlined_packager.package_messages(
+                        session_id=session.id,
+                        state="CONTENT_GENERATION",
+                        agent_output=content,
+                        context=None
+                    )
+                # Alternative: use session.presentation_url if content format different
+                elif session.presentation_url:
+                    return self.streamlined_packager.package_messages(
+                        session_id=session.id,
+                        state="CONTENT_GENERATION",
+                        agent_output={
+                            "type": "presentation_url",
+                            "url": session.presentation_url,
+                            "presentation_id": session.presentation_strawman.get("preview_presentation_id", "") if session.presentation_strawman else "",
+                            "slide_count": len(session.presentation_strawman.get("slides", [])) if session.presentation_strawman else 0
+                        },
+                        context=None
+                    )
+                else:
+                    logger.warning(f"No presentation URL for history[{history_idx}]")
+                    return []
+
+            else:
+                logger.warning(f"Unknown state '{state}' in history[{history_idx}]")
+                return []
+
+        except Exception as e:
+            logger.error(f"Error reconstructing message at history[{history_idx}]: {e}", exc_info=True)
+            return []
 
     async def _handle_message(self, websocket: WebSocket, session: Any, message: Dict[str, Any]):
         """
