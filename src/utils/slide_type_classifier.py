@@ -70,21 +70,59 @@ class SlideTypeClassifier:
         "three tiers", "four tiers", "five tiers", "six tiers"
     }
 
-    # v3.4-analytics: Analytics/Chart visualization keywords (Analytics Service)
+    # v3.4-analytics: Analytics/Chart visualization keywords (Analytics Service v3.7.0)
+    # Supports 18 chart types: 14 Chart.js + 4 D3.js
+    # These keywords help Director AI identify slides that benefit from data visualization
     ANALYTICS_KEYWORDS = {
+        # Core analytics terms
         "chart", "graph", "analytics", "data visualization", "visualization",
         "revenue", "sales", "growth", "performance", "metrics",
         "quarterly", "monthly", "annual", "year-over-year", "yoy",
-        "market share", "pie chart", "donut chart", "bar chart", "line chart",
-        "scatter plot", "histogram", "trend", "trending", "time series",
         "kpi", "key performance indicator", "metric dashboard", "scorecard",
         "financial data", "business metrics", "operational metrics",
-        "comparison chart", "benchmark", "benchmarking",
         "show data", "visualize data", "plot data", "display metrics",
-        "revenue over time", "quarterly comparison", "growth chart",
         "Q1", "Q2", "Q3", "Q4", "fiscal year", "fy",
         "percentage", "percent", "%", "increase", "decrease",
-        "target vs actual", "forecast vs actual", "budget vs actual"
+
+        # Chart type specific keywords
+        "pie chart", "donut chart", "doughnut chart", "bar chart", "line chart",
+        "scatter plot", "histogram", "trend", "trending", "time series",
+        "comparison chart", "benchmark", "benchmarking",
+        "revenue over time", "quarterly comparison", "growth chart",
+        "target vs actual", "forecast vs actual", "budget vs actual",
+
+        # Multi-series and composition keywords (area, stacked, grouped)
+        "cumulative", "stacked breakdown", "grouped comparison", "side by side",
+        "composition over time", "revenue breakdown", "cost structure",
+        "segment contribution", "layered data", "multiple series",
+        "area chart", "filled area", "cumulative growth",
+
+        # Mixed chart keywords
+        "mixed chart", "combined visualization", "revenue vs cost",
+        "actual vs target", "multiple metrics", "dual axis",
+
+        # D3 Treemap keywords
+        "treemap", "hierarchical breakdown", "budget allocation",
+        "resource distribution", "nested rectangles", "proportional sizing",
+        "department spending", "portfolio composition", "market share breakdown",
+
+        # D3 Sunburst keywords
+        "sunburst", "radial hierarchy", "circular breakdown", "concentric circles",
+        "multi-level structure", "organizational breakdown", "nested hierarchy",
+        "radial diagram", "circular layout",
+
+        # D3 Choropleth USA keywords
+        "map", "geographic", "by state", "state-level", "regional distribution",
+        "USA map", "state-by-state", "choropleth", "color-coded map",
+        "geographic distribution", "regional performance", "state performance",
+        "california", "texas", "new york", "florida", "illinois",
+        "regional sales", "market penetration", "geographic breakdown",
+
+        # D3 Sankey keywords
+        "flow", "sankey", "flow diagram", "allocation flow", "process flow",
+        "from to", "→", "->", "energy flow", "budget flow", "resource flow",
+        "customer journey", "workflow", "allocation breakdown", "transfer",
+        "revenue allocation", "department allocation", "source to destination"
     }
 
     MATRIX_KEYWORDS = {

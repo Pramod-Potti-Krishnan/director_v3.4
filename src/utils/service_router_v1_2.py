@@ -467,12 +467,15 @@ class ServiceRouterV1_2:
                             logger.warning(f"Analytics slide {slide.slide_id} missing chart_id, defaulting to 'line'")
                             chart_type = "line"
 
-                        # v3.4.1: Check if chart type is disabled due to known issues
+                        # v3.4.4: Chart status updated based on Analytics Service v3.4.4 fixes
+                        # ✅ FIXED in v3.4.4: bar_grouped, bar_stacked, area_stacked
+                        # ❌ STILL BROKEN: mixed, d3_sunburst (wrong CDN plugin reference)
                         DISABLED_CHARTS = {
-                            "bar_grouped": "P0 - Multi-series data structure bug",
-                            "bar_stacked": "P0 - Multi-series data structure bug",
-                            "area_stacked": "P0 - Multi-series data structure bug",
-                            "mixed": "P0 - Multi-series data structure bug",
+                            # "bar_grouped": "FIXED in v3.4.4 ✅",
+                            # "bar_stacked": "FIXED in v3.4.4 ✅",
+                            # "area_stacked": "FIXED in v3.4.4 ✅",
+                            "mixed": "P0 - Wrong CDN plugin + rendering as line instead of mixed",
+                            "d3_sunburst": "P0 - Wrong CDN plugin + rendering as bar instead of sunburst",
                             "d3_choropleth_usa": "P1 - Not implemented",
                             "d3_sankey": "P1 - Plugin not loaded"
                         }
@@ -486,7 +489,7 @@ class ServiceRouterV1_2:
 
                         # Map chart_type to analytics_endpoint using chart_type_mappings
                         # This mapping is from config/analytics_variants.json
-                        # Note: Disabled charts removed from mapping
+                        # v3.4.4: Re-enabled bar_grouped, bar_stacked, area_stacked (FIXED ✅)
                         chart_type_mappings = {
                             "line": "revenue_over_time",
                             "bar_vertical": "quarterly_comparison",
@@ -498,12 +501,12 @@ class ServiceRouterV1_2:
                             "radar": "multi_metric_comparison",
                             "polar_area": "radial_composition",
                             "area": "revenue_over_time",
-                            # "bar_grouped": "quarterly_comparison",  # DISABLED: P0 - Multi-series bug
-                            # "bar_stacked": "quarterly_comparison",  # DISABLED: P0 - Multi-series bug
-                            # "area_stacked": "revenue_over_time",  # DISABLED: P0 - Multi-series bug
-                            # "mixed": "kpi_metrics",  # DISABLED: P0 - Multi-series bug
+                            "bar_grouped": "quarterly_comparison",  # ✅ RE-ENABLED v3.4.4: Multi-series bug FIXED
+                            "bar_stacked": "quarterly_comparison",  # ✅ RE-ENABLED v3.4.4: Multi-series bug FIXED
+                            "area_stacked": "revenue_over_time",  # ✅ RE-ENABLED v3.4.4: Multi-series bug FIXED
+                            # "mixed": "kpi_metrics",  # DISABLED: P0 - Wrong CDN plugin + renders as line
                             "d3_treemap": "market_share",
-                            "d3_sunburst": "market_share"
+                            "d3_sunburst": "market_share"  # STILL BROKEN: P0 - Wrong CDN plugin (renders as bar)
                             # "d3_choropleth_usa": "market_share",  # DISABLED: P1 - Not implemented
                             # "d3_sankey": "market_share"  # DISABLED: P1 - Plugin not loaded
                         }

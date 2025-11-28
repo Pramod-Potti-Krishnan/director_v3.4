@@ -116,9 +116,11 @@ class AnalyticsClient:
         self,
         analytics_type: str,
         layout: str,
-        data: List[Dict[str, Any]],
+        chart_type: str,
         narrative: str,
         context: Optional[Dict[str, Any]] = None,
+        data: Optional[List[Dict[str, Any]]] = None,
+        use_synthetic: bool = False,
         presentation_id: Optional[str] = None,
         slide_id: Optional[str] = None,
         slide_number: Optional[int] = None,
@@ -127,26 +129,38 @@ class AnalyticsClient:
         """
         Generate an analytics chart with AI-generated observations.
 
+        Analytics Service v3.8.0+ supports SYNTHETIC DATA GENERATION:
+        - If data is provided: Uses Director's data (recommended)
+        - If data is None: Auto-generates realistic synthetic data
+        - use_synthetic=True: Explicitly requests synthetic data for testing
+
         The Analytics service will:
-        1. Generate chart using Chart.js or similar library
+        1. Generate chart using Chart.js or D3.js (18 chart types)
         2. Generate AI observations/insights using GPT-4o-mini
         3. Create HTML for chart (element_3) and observations (element_2)
         4. Consider previous slides context for narrative continuity
 
         Args:
-            analytics_type: Type of analytics visualization
-                - "revenue_over_time": Line chart for time series
-                - "quarterly_comparison": Bar chart for period comparison
-                - "market_share": Donut chart for distribution
-                - "yoy_growth": Bar chart with YoY comparison
-                - "kpi_metrics": Multi-metric bar chart
+            analytics_type: Type of analytics visualization endpoint
+                - "revenue_over_time": Time series endpoint
+                - "quarterly_comparison": Period comparison endpoint
+                - "market_share": Distribution/composition endpoint
+                - "yoy_growth": Year-over-year comparison endpoint
+                - "kpi_metrics": Multi-metric endpoint
+                - "category_ranking": Ranking endpoint
+                - "correlation_analysis": Correlation endpoint
+                - "multidimensional_analysis": Multi-dimensional endpoint
+                - "multi_metric_comparison": Multi-metric radar endpoint
+                - "radial_composition": Radial composition endpoint
             layout: Target layout template
                 - "L01": Single centered chart
-                - "L02": Chart left + observations right
+                - "L02": Chart left + observations right (most common)
                 - "L03": Two charts side-by-side
-            data: Chart data points as list of dicts
-                - Each dict must have: {"label": str, "value": number}
-                - Example: [{"label": "Q1 2024", "value": 125000}, ...]
+            chart_type: REQUIRED - Specific chart type (for synthetic data & override)
+                - Chart.js: line, bar_vertical, bar_horizontal, pie, doughnut,
+                  scatter, bubble, radar, polar_area, area, bar_grouped,
+                  bar_stacked, area_stacked, mixed
+                - D3.js: d3_treemap, d3_sunburst, d3_choropleth_usa, d3_sankey
             narrative: User's narrative/request about what to show
             context: Additional context dict with keys:
                 - presentation_title: Overall presentation title
@@ -154,6 +168,12 @@ class AnalyticsClient:
                 - tone: Content tone (professional, casual, technical)
                 - audience: Target audience (executives, managers, technical)
                 - theme: Visual theme (professional, bold, minimal)
+            data: OPTIONAL - Chart data points as list of dicts
+                - If provided: Uses this data
+                - If None: Analytics generates synthetic data
+                - Each dict must have: {"label": str, "value": number}
+                - Example: [{"label": "Q1 2024", "value": 125000}, ...]
+            use_synthetic: If True, adds ?use_synthetic=true to URL (for testing)
             presentation_id: Optional presentation identifier (for logging)
             slide_id: Optional slide identifier (for logging)
             slide_number: Optional slide position (for context)
@@ -170,7 +190,12 @@ class AnalyticsClient:
                     - content.element_1: Optional subtitle override
                 For L01/L03 layouts:
                     - content fields matching those layouts
-                - metadata: Generation metadata (service, type, time, model)
+                - metadata: Generation metadata including:
+                    - service: "analytics_v3"
+                    - chart_type: Actual chart type used
+                    - data_source: "director" or "synthetic"
+                    - synthetic_data_used: true/false
+                    - generation_time_ms: Processing time
 
         Raises:
             httpx.HTTPError: If API call fails
@@ -200,8 +225,12 @@ class AnalyticsClient:
         # Build request payload
         payload = {
             "narrative": narrative,
-            "data": data
+            "chart_type": chart_type  # REQUIRED for synthetic data (v3.8.0+)
         }
+
+        # Add data ONLY if provided (v3.8.0+: data is optional)
+        if data is not None and len(data) > 0:
+            payload["data"] = data
 
         # Add optional session tracking fields
         if presentation_id:
@@ -225,12 +254,18 @@ class AnalyticsClient:
                 "chart_height": 600
             }
 
+        # Determine data strategy
+        data_strategy = "director_data" if (data and len(data) > 0) else "synthetic_data"
+
         logger.info(
             f"Generating {analytics_type} chart for {layout} layout",
             extra={
                 "analytics_type": analytics_type,
                 "layout": layout,
-                "data_points": len(data),
+                "chart_type": chart_type,
+                "data_strategy": data_strategy,
+                "data_points": len(data) if data else 0,
+                "use_synthetic_flag": use_synthetic,
                 "presentation_id": presentation_id,
                 "slide_id": slide_id,
                 "has_previous_context": bool(context and context.get("previous_slides"))
@@ -240,6 +275,10 @@ class AnalyticsClient:
         try:
             # Call Analytics Service API
             endpoint = f"{self.base_url}/api/v1/analytics/{layout}/{analytics_type}"
+
+            # Add ?use_synthetic=true query param if explicitly requested
+            if use_synthetic:
+                endpoint += "?use_synthetic=true"
 
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
@@ -252,17 +291,33 @@ class AnalyticsClient:
 
                     # Log generation results
                     metadata = result.get("metadata", {})
+                    synthetic_used = metadata.get("synthetic_data_used", False)
+                    data_source = metadata.get("data_source", "unknown")
+
                     logger.info(
                         "Analytics chart generated successfully",
                         extra={
                             "analytics_type": analytics_type,
                             "layout": layout,
                             "chart_type": metadata.get("chart_type"),
+                            "data_source": data_source,
+                            "synthetic_data_used": synthetic_used,
                             "generation_time_ms": metadata.get("generation_time_ms"),
                             "model": metadata.get("model_used"),
                             "data_points": metadata.get("data_points")
                         }
                     )
+
+                    # Log synthetic data usage (v3.8.0+)
+                    if synthetic_used:
+                        logger.info(
+                            f"Slide {slide_number}: Analytics Service used synthetic data",
+                            extra={
+                                "slide_number": slide_number,
+                                "chart_type": chart_type,
+                                "data_source": data_source
+                            }
+                        )
 
                     # Validate response structure for L02
                     if layout == "L02":
