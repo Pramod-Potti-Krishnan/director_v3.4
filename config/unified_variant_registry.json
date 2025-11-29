@@ -1,0 +1,449 @@
+{
+  "$schema": "./schemas/unified_registry_schema.json",
+  "version": "2.0.0",
+  "last_updated": "2025-11-29",
+  "total_services": 3,
+  "total_variants": 56,
+
+  "services": {
+    "illustrator_service_v1.0": {
+      "enabled": true,
+      "base_url": "http://localhost:8000",
+      "service_type": "llm_generated",
+      "endpoint_pattern": "per_variant",
+      "timeout": 60,
+
+      "variants": {
+        "pyramid": {
+          "variant_id": "pyramid",
+          "display_name": "Pyramid (Hierarchical)",
+          "description": "Multi-level hierarchical structure from foundation to peak",
+          "status": "production",
+          "endpoint": "/v1.0/pyramid/generate",
+          "layout_id": "L25",
+
+          "classification": {
+            "priority": 4,
+            "keywords": [
+              "pyramid", "hierarchical", "hierarchy", "organizational structure",
+              "levels", "tier", "tiers", "tiered", "layered", "layers",
+              "foundation to top", "base to peak", "top to bottom",
+              "organizational chart", "org chart", "reporting structure",
+              "escalation", "progression", "maslow", "food pyramid",
+              "pyramid structure", "pyramid model", "pyramid framework",
+              "from foundation", "building blocks", "level 1", "level 2",
+              "3 levels", "4 levels", "5 levels", "6 levels",
+              "three tiers", "four tiers", "five tiers", "six tiers"
+            ]
+          },
+
+          "llm_guidance": {
+            "use_cases": [
+              "Organizational hierarchies (CEO → Directors → Managers → Staff)",
+              "Skill development pathways (Foundation → Intermediate → Advanced → Expert)",
+              "Priority frameworks (Critical → Important → Nice-to-have)",
+              "Maslow's hierarchy of needs",
+              "Strategic frameworks (Vision → Strategy → Tactics → Execution)"
+            ],
+            "best_for": "Showing multi-level structures from foundation to top",
+            "avoid_when": "Less than 3 or more than 6 levels needed",
+            "examples": [
+              {
+                "title": "Organizational Structure",
+                "key_points": [
+                  "Vision & Strategic Direction",
+                  "Department Leadership",
+                  "Team Management",
+                  "Execution & Operations"
+                ]
+              }
+            ]
+          },
+
+          "parameters": {
+            "count_field": "num_levels",
+            "count_range": {"min": 3, "max": 6},
+            "optimal_count": 4,
+            "element_name": "levels",
+            "required_fields": ["num_levels", "topic"]
+          },
+
+          "service_specific": {
+            "illustrator": {
+              "generation_type": "llm_powered",
+              "llm_model": "gemini-2.5-flash-lite",
+              "character_constraints": true,
+              "supports_target_points": true,
+              "supports_context": true
+            }
+          }
+        },
+
+        "funnel": {
+          "variant_id": "funnel",
+          "display_name": "Funnel (Conversion)",
+          "description": "Multi-stage funnel showing progressive filtering or conversion",
+          "status": "production",
+          "endpoint": "/v1.0/funnel/generate",
+          "layout_id": "L25",
+
+          "classification": {
+            "priority": 5,
+            "keywords": [
+              "funnel", "sales funnel", "conversion funnel", "marketing funnel",
+              "customer funnel", "pipeline", "sales pipeline", "lead pipeline",
+              "awareness", "consideration", "decision", "conversion",
+              "tofu", "mofu", "bofu",
+              "lead generation", "qualification", "nurturing", "closing",
+              "conversion rate", "conversion optimization", "drop-off",
+              "customer journey", "buyer journey", "purchase journey",
+              "stages of buying", "sales process", "conversion process",
+              "funnel metrics", "funnel analysis", "funnel optimization",
+              "conversion tracking", "stage conversion", "funnel drop-off",
+              "inverted funnel", "hourglass funnel", "bowtie funnel",
+              "4-stage funnel", "5-stage funnel", "multi-stage funnel",
+              "lead to customer", "prospect to sale", "awareness to purchase",
+              "from lead to close", "acquisition funnel", "retention funnel",
+              "narrowing", "filtering", "progressive", "step-by-step reduction"
+            ]
+          },
+
+          "llm_guidance": {
+            "use_cases": [
+              "Sales pipelines (Leads → Qualified → Proposals → Closed)",
+              "Marketing funnels (TOFU → MOFU → BOFU → Customers)",
+              "Customer journey mapping (Awareness → Consideration → Decision)",
+              "Conversion optimization processes",
+              "Lead qualification stages"
+            ],
+            "best_for": "Showing volume reduction through stages",
+            "avoid_when": "Stages don't have decreasing quantities",
+            "examples": [
+              {
+                "title": "Sales Conversion Funnel",
+                "key_points": [
+                  "Website Visitors (10,000)",
+                  "Qualified Leads (1,000)",
+                  "Sales Opportunities (100)",
+                  "Closed Deals (25)"
+                ]
+              }
+            ]
+          },
+
+          "parameters": {
+            "count_field": "num_stages",
+            "count_range": {"min": 3, "max": 5},
+            "optimal_count": 4,
+            "element_name": "stages",
+            "required_fields": ["num_stages", "topic"]
+          },
+
+          "service_specific": {
+            "illustrator": {
+              "generation_type": "llm_powered",
+              "llm_model": "gemini-2.5-flash-lite",
+              "character_constraints": true,
+              "supports_target_points": true,
+              "supports_context": true
+            }
+          }
+        },
+
+        "concentric_circles": {
+          "variant_id": "concentric_circles",
+          "display_name": "Concentric Circles",
+          "description": "Nested circular layers showing core-to-periphery relationships",
+          "status": "production",
+          "endpoint": "/v1.0/concentric_circles/generate",
+          "layout_id": "L25",
+
+          "classification": {
+            "priority": 6,
+            "keywords": [
+              "concentric", "concentric circles", "nested circles", "circular layers",
+              "rings", "orbital", "radial", "ripple effect", "ripples",
+              "inner circle", "outer circle", "core and periphery",
+              "center outward", "from center", "expanding circles",
+              "layered circles", "multiple circles", "circular zones",
+              "influence zones", "zones of influence", "reach layers",
+              "impact radius", "sphere of influence", "concentric zones",
+              "proximity circles", "distance from core",
+              "stakeholder map", "stakeholder circles", "influence mapping",
+              "target audience layers", "customer segments",
+              "market reach", "market penetration", "market layers",
+              "engagement levels", "user segmentation circles",
+              "core competency", "core capabilities", "extended capabilities",
+              "core team", "extended team", "partner network",
+              "bull's eye", "bullseye", "target circles", "dartboard",
+              "onion layers", "layered approach", "nested structure",
+              "radiating", "emanating", "outward expansion"
+            ]
+          },
+
+          "llm_guidance": {
+            "use_cases": [
+              "Stakeholder influence maps (Core Team → Department → Company → Partners)",
+              "Market reach strategy (Primary → Secondary → Tertiary Markets)",
+              "Organizational proximity (Executive → Management → Team → Contractors)",
+              "Customer segmentation (VIP → Active → Occasional → Potential)",
+              "Impact zones (Direct → Indirect → Ripple → Long-term)"
+            ],
+            "best_for": "Showing relationships from core to periphery",
+            "avoid_when": "Hierarchy or progression is more important than proximity",
+            "examples": [
+              {
+                "title": "Stakeholder Influence Map",
+                "key_points": [
+                  "Core Team (Direct Control)",
+                  "Department Leads (High Influence)",
+                  "Company-wide Teams (Moderate Influence)",
+                  "External Partners (Low Influence)"
+                ]
+              }
+            ]
+          },
+
+          "parameters": {
+            "count_field": "num_circles",
+            "count_range": {"min": 3, "max": 5},
+            "optimal_count": 4,
+            "element_name": "circles",
+            "required_fields": ["num_circles", "topic"]
+          },
+
+          "service_specific": {
+            "illustrator": {
+              "generation_type": "llm_powered",
+              "llm_model": "gemini-2.5-flash-lite",
+              "character_constraints": true,
+              "supports_target_points": true,
+              "supports_context": true
+            }
+          }
+        }
+      }
+    },
+
+    "text_service_v1.2": {
+      "enabled": true,
+      "base_url": "https://web-production-5daf.up.railway.app",
+      "service_type": "template_based",
+      "endpoint_pattern": "single",
+      "timeout": 60,
+      "default_endpoint": "/v1.2/generate",
+
+      "variants": {
+        "bilateral_comparison": {
+          "variant_id": "bilateral_comparison",
+          "display_name": "Bilateral Comparison",
+          "description": "Side-by-side comparison of two options or scenarios",
+          "status": "production",
+          "layout_id": "L25",
+
+          "classification": {
+            "priority": 8,
+            "keywords": [
+              "compare", "comparison", "versus", "vs", "vs.", "v.s.",
+              "option a", "option b", "option c", "alternative",
+              "choose between", "differences between", "which option",
+              "side by side", "side-by-side", "compare and contrast",
+              "tier 1", "tier 2", "tier 3", "plan comparison",
+              "before and after", "old vs new", "current vs proposed"
+            ]
+          },
+
+          "llm_guidance": {
+            "use_cases": [
+              "Comparing two products or services",
+              "Before vs After scenarios",
+              "Option A vs Option B decisions",
+              "Pros and Cons analysis"
+            ],
+            "best_for": "Presenting clear trade-offs between two alternatives",
+            "avoid_when": "More than two options (use matrix_2x2)",
+            "examples": [
+              {
+                "title": "Cloud Providers Comparison",
+                "key_points": [
+                  "AWS: Mature ecosystem, higher cost, global reach",
+                  "GCP: Better ML tools, cost-effective, growing"
+                ]
+              }
+            ]
+          },
+
+          "required_fields": ["variant_id", "title"],
+          "optional_fields": ["subtitle", "key_points", "tone", "audience"],
+
+          "service_specific": {
+            "text_service": {
+              "supports_subtitles": true,
+              "max_key_points": 8,
+              "template_file": "bilateral_comparison.html"
+            }
+          }
+        },
+
+        "matrix_2x2": {
+          "variant_id": "matrix_2x2",
+          "display_name": "2x2 Matrix",
+          "description": "Four-quadrant strategic framework matrix",
+          "status": "production",
+          "layout_id": "L25",
+
+          "classification": {
+            "priority": 7,
+            "keywords": [
+              "matrix", "quadrant", "2x2", "2 x 2", "four quadrants",
+              "pros vs cons", "pros and cons", "benefits vs drawbacks",
+              "trade-offs", "trade offs", "strengths weaknesses",
+              "swot", "swot analysis", "strategic framework",
+              "comparing", "comparison matrix", "eisenhower matrix",
+              "bcg matrix", "ansoff matrix", "four-box"
+            ]
+          },
+
+          "llm_guidance": {
+            "use_cases": [
+              "SWOT analysis (Strengths, Weaknesses, Opportunities, Threats)",
+              "Eisenhower Matrix (Urgent/Important)",
+              "BCG Matrix (Stars, Cash Cows, Question Marks, Dogs)",
+              "Decision frameworks with two dimensions"
+            ],
+            "best_for": "Strategic frameworks with two axes",
+            "avoid_when": "More than 4 categories needed"
+          },
+
+          "required_fields": ["variant_id", "title"],
+          "optional_fields": ["subtitle", "key_points"],
+
+          "service_specific": {
+            "text_service": {
+              "supports_subtitles": true,
+              "max_key_points": 4,
+              "template_file": "matrix_2x2.html"
+            }
+          }
+        }
+      }
+    },
+
+    "analytics_service_v3": {
+      "enabled": true,
+      "base_url": "http://localhost:8006",
+      "service_type": "data_visualization",
+      "endpoint_pattern": "typed",
+      "timeout": 60,
+      "endpoints": {
+        "chartjs": "/analytics/v3/chartjs/generate",
+        "d3": "/analytics/v3/d3/generate"
+      },
+
+      "variants": {
+        "pie_chart": {
+          "variant_id": "pie_chart",
+          "display_name": "Pie Chart",
+          "description": "Circular chart showing proportions of a whole",
+          "status": "production",
+          "layout_id": "L25",
+
+          "classification": {
+            "priority": 2,
+            "keywords": [
+              "pie chart", "pie", "proportion", "percentage", "percent",
+              "share", "distribution", "breakdown", "composition",
+              "market share", "budget allocation", "donut chart",
+              "revenue breakdown", "parts of whole"
+            ]
+          },
+
+          "llm_guidance": {
+            "use_cases": [
+              "Market share distribution",
+              "Budget allocation by department",
+              "Revenue breakdown by product",
+              "Time allocation across activities"
+            ],
+            "best_for": "Showing parts of a whole (percentages)",
+            "avoid_when": "More than 8-10 categories"
+          },
+
+          "data_requirements": {
+            "structure": "label_value_pairs",
+            "min_items": 2,
+            "max_items": 12,
+            "value_type": "numeric",
+            "supports_percentages": true
+          },
+
+          "service_specific": {
+            "analytics": {
+              "library": "chartjs",
+              "chart_type": "pie",
+              "endpoint_key": "chartjs",
+              "supports_custom_colors": true,
+              "supports_data_labels": true
+            }
+          }
+        },
+
+        "bar_chart": {
+          "variant_id": "bar_chart",
+          "display_name": "Bar Chart",
+          "description": "Vertical or horizontal bars comparing categories",
+          "status": "production",
+          "layout_id": "L25",
+
+          "classification": {
+            "priority": 2,
+            "keywords": [
+              "bar chart", "bar", "bars", "column chart", "columns",
+              "comparison", "compare categories", "categorical data",
+              "revenue by region", "sales by product", "vertical bars",
+              "horizontal bars"
+            ]
+          },
+
+          "llm_guidance": {
+            "use_cases": [
+              "Comparing values across categories",
+              "Sales by region or product",
+              "Survey results comparison",
+              "Performance metrics by team"
+            ],
+            "best_for": "Comparing discrete categories",
+            "avoid_when": "Time series data (use line chart)"
+          },
+
+          "data_requirements": {
+            "structure": "label_value_pairs",
+            "min_items": 2,
+            "max_items": 20,
+            "value_type": "numeric"
+          },
+
+          "service_specific": {
+            "analytics": {
+              "library": "chartjs",
+              "chart_type": "bar",
+              "endpoint_key": "chartjs",
+              "supports_horizontal": true,
+              "supports_stacked": true
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "classification_priority_order": [
+    "pie_chart",
+    "bar_chart",
+    "pyramid",
+    "funnel",
+    "concentric_circles",
+    "matrix_2x2",
+    "bilateral_comparison"
+  ]
+}
