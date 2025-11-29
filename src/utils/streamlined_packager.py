@@ -80,7 +80,8 @@ class StreamlinedMessagePackager:
             # Fallback for unknown states
             return [create_chat_message(
                 session_id=session_id,
-                text=f"Processing state: {state}"
+                text=f"Processing state: {state}",
+                role="assistant"
             )]
     
     def _package_greeting(self, session_id: str) -> List[StreamlinedMessage]:
@@ -90,7 +91,8 @@ class StreamlinedMessagePackager:
                 session_id=session_id,
                 text="Hello! I'm Deckster, your AI presentation assistant. I can help you create "
                      "professional, engaging presentations on any topic.\n\n"
-                     "What presentation would you like to build today?"
+                     "What presentation would you like to build today?",
+                role="assistant"
             )
         ]
     
@@ -104,7 +106,8 @@ class StreamlinedMessagePackager:
             create_chat_message(
                 session_id=session_id,
                 text="Great topic! To create the perfect presentation for you, I need to understand your needs better:",
-                list_items=questions.questions
+                list_items=questions.questions,
+                role="assistant"
             )
         ]
     
@@ -122,7 +125,8 @@ class StreamlinedMessagePackager:
                 session_id=session_id,
                 text=f"Perfect! Based on your input, I'll create a {plan.proposed_slide_count}-slide presentation.",
                 sub_title="Key assumptions I'm making:",
-                list_items=plan.key_assumptions
+                list_items=plan.key_assumptions,
+                role="assistant"
             )
         )
         
@@ -233,7 +237,8 @@ class StreamlinedMessagePackager:
                 create_chat_message(
                     session_id=session_id,
                     text="Review the structural outline in the preview. If you're happy with the structure, click 'Looks perfect!' to generate rich HTML content for all slides using AI.",
-                    format="plain"
+                    format="plain",
+                    role="assistant"
                 )
             )
 
@@ -329,7 +334,8 @@ class StreamlinedMessagePackager:
                 list_items=[
                     f"Updated slide {slide_id.split('_')[1]} with your requested changes"
                     for slide_id in affected_slide_ids
-                ]
+                ],
+                role="assistant"
             )
         )
 
@@ -392,7 +398,8 @@ class StreamlinedMessagePackager:
             return [
                 create_chat_message(
                     session_id=session_id,
-                    text="Processing content generation..."
+                    text="Processing content generation...",
+                    role="assistant"
                 )
             ]
 
@@ -481,7 +488,8 @@ class StreamlinedMessagePackager:
             create_chat_message(
                 session_id=session_id,
                 text="I encountered an error while processing your request. Please try again or let me know if you need help.",
-                format="plain"
+                format="plain",
+                role="assistant"
             )
         ]
     
