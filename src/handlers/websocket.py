@@ -339,12 +339,13 @@ class WebSocketHandler:
             state = history_item.get('state')  # Only for assistant messages
 
             if role == 'user':
-                # Reconstruct user message as simple chat_message
+                # Reconstruct user message as simple chat_message with role='user'
                 all_messages.append(
                     create_chat_message(
                         session_id=session.id,
                         text=content,  # Raw user text
-                        format="plain"
+                        format="plain",
+                        role="user"  # Critical: Mark as user message for frontend classification
                     )
                 )
 

@@ -110,7 +110,8 @@ class BaseMessage(BaseModel):
     session_id: str = Field(..., description="Session identifier")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Message timestamp")
     type: MessageType = Field(..., description="Message type discriminator")
-    
+    role: Optional[Literal["user", "assistant"]] = Field(None, description="Message sender role (user or assistant)")
+
     class Config:
         use_enum_values = True
         json_encoders = {
@@ -255,13 +256,15 @@ def create_chat_message(
     message_id: Optional[str] = None,
     sub_title: Optional[str] = None,
     list_items: Optional[List[str]] = None,
-    format: Literal["markdown", "plain"] = "markdown"
+    format: Literal["markdown", "plain"] = "markdown",
+    role: Optional[Literal["user", "assistant"]] = None
 ) -> ChatMessage:
     """Helper function to create a chat message"""
     import uuid
     return ChatMessage(
         message_id=message_id or f"msg_{uuid.uuid4().hex[:8]}",
         session_id=session_id,
+        role=role,
         payload=ChatPayload(
             text=text,
             sub_title=sub_title,
