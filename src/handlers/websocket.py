@@ -339,13 +339,18 @@ class WebSocketHandler:
             state = history_item.get('state')  # Only for assistant messages
 
             if role == 'user':
-                # Reconstruct user message as simple chat_message with role='user'
+                # Reconstruct user message as simple chat_message with role='user' and original timestamp
+                original_timestamp = history_item.get('timestamp')
+                if not original_timestamp:
+                    logger.warning(f"Missing timestamp for user message at history index {idx}, message will use current time")
+
                 all_messages.append(
                     create_chat_message(
                         session_id=session.id,
                         text=content,  # Raw user text
                         format="plain",
-                        role="user"  # Critical: Mark as user message for frontend classification
+                        role="user",  # Critical: Mark as user message for frontend classification
+                        timestamp=original_timestamp  # Critical: Preserve original timestamp for chronological ordering
                     )
                 )
 
@@ -358,6 +363,14 @@ class WebSocketHandler:
                     history_idx=idx
                 )
                 if reconstructed:
+                    # Override timestamps with original from history to preserve chronological ordering
+                    original_timestamp = history_item.get('timestamp')
+                    if original_timestamp:
+                        for msg in reconstructed:
+                            msg.timestamp = datetime.fromisoformat(original_timestamp)
+                    elif not original_timestamp:
+                        logger.warning(f"Missing timestamp for assistant message at history index {idx}, messages will use current time")
+
                     all_messages.extend(reconstructed)
 
         # Send all reconstructed messages
@@ -666,16 +679,18 @@ class WebSocketHandler:
             # STEP 5: Process with Director (only if not already cached)
             response = await self.director.process(state_context)
 
-            # Store in history
+            # Store in history with timestamps for proper chronological restoration
             await self.sessions.add_to_history(session.id, self.current_user_id, {
                 'role': 'user',
                 'content': user_input,
-                'intent': intent.dict()
+                'intent': intent.dict(),
+                'timestamp': datetime.utcnow().isoformat()  # Preserve original send time
             })
             await self.sessions.add_to_history(session.id, self.current_user_id, {
                 'role': 'assistant',
                 'state': session.current_state,
-                'content': response
+                'content': response,
+                'timestamp': datetime.utcnow().isoformat()  # Preserve original response time
             })
 
             # v3.1: Save strawman to session for REFINE_STRAWMAN and CONTENT_GENERATION

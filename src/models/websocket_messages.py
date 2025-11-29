@@ -257,11 +257,19 @@ def create_chat_message(
     sub_title: Optional[str] = None,
     list_items: Optional[List[str]] = None,
     format: Literal["markdown", "plain"] = "markdown",
-    role: Optional[Literal["user", "assistant"]] = None
+    role: Optional[Literal["user", "assistant"]] = None,
+    timestamp: Optional[str] = None
 ) -> ChatMessage:
-    """Helper function to create a chat message"""
+    """
+    Helper function to create a chat message.
+
+    Args:
+        timestamp: Optional ISO format timestamp string. If provided, overrides default timestamp.
+                   This is critical for preserving original message timestamps during session restoration.
+    """
     import uuid
-    return ChatMessage(
+
+    msg = ChatMessage(
         message_id=message_id or f"msg_{uuid.uuid4().hex[:8]}",
         session_id=session_id,
         role=role,
@@ -272,6 +280,12 @@ def create_chat_message(
             format=format
         )
     )
+
+    # Override default timestamp if original timestamp provided (for historical messages)
+    if timestamp:
+        msg.timestamp = datetime.fromisoformat(timestamp)
+
+    return msg
 
 
 def create_action_request(
