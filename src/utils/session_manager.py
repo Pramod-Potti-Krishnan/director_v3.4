@@ -4,7 +4,7 @@ Session management for Deckster.
 from typing import Optional, Dict, Any
 from datetime import datetime
 import traceback
-from supabase import Client
+from supabase import AsyncClient
 from src.models.session import Session
 from src.utils.logger import setup_logger
 
@@ -14,15 +14,15 @@ logger = setup_logger(__name__)
 class SessionManager:
     """Manages session CRUD operations with Supabase."""
     
-    def __init__(self, supabase_client: Client):
+    def __init__(self, supabase_client: AsyncClient):
         """
         Initialize session manager.
-        
+
         Args:
             supabase_client: Supabase client instance
         """
         self.supabase = supabase_client
-        self.table_name = "sessions"
+        self.table_name = "dr_sessions"
         self.cache: Dict[str, Session] = {}  # Local cache for performance
     
     async def get_or_create(self, session_id: str, user_id: str) -> Session:
@@ -51,7 +51,7 @@ class SessionManager:
         # Try to fetch from Supabase
         print("[DEBUG SessionManager] Checking Supabase for existing session")
         try:
-            result = self.supabase.table(self.table_name).select("*").eq("id", session_id).eq("user_id", user_id).execute()
+            result = await self.supabase.table(self.table_name).select("*").eq("id", session_id).eq("user_id", user_id).execute()
             print(f"[DEBUG SessionManager] Supabase query result: {result}")
             
             if result.data:
@@ -95,7 +95,7 @@ class SessionManager:
             session_data['created_at'] = session.created_at.isoformat()
             session_data['updated_at'] = session.updated_at.isoformat()
 
-            result = self.supabase.table(self.table_name).insert(session_data).execute()
+            result = await self.supabase.table(self.table_name).insert(session_data).execute()
             print(f"[DEBUG SessionManager] ✅ Supabase INSERT successful - result: {result}")
             logger.info(f"Created new session {session_id} for user {user_id}")
             logger.info(f"🔍 DEBUG: Created NEW session in Supabase - state=PROVIDE_GREETING")
@@ -128,7 +128,7 @@ class SessionManager:
         # Update in Supabase
         try:
             print(f"[DEBUG SessionManager] 💾 Attempting Supabase UPDATE...")
-            result = self.supabase.table(self.table_name).update({
+            result = await self.supabase.table(self.table_name).update({
                 'current_state': state,
                 'updated_at': session.updated_at.isoformat()
             }).eq('id', session_id).eq('user_id', user_id).execute()
@@ -169,7 +169,7 @@ class SessionManager:
         
         # Update in Supabase
         try:
-            result = self.supabase.table(self.table_name).update({
+            result = await self.supabase.table(self.table_name).update({
                 'conversation_history': session.conversation_history,
                 'updated_at': session.updated_at.isoformat()
             }).eq('id', session_id).eq('user_id', user_id).execute()
@@ -203,7 +203,7 @@ class SessionManager:
 
         # Update in Supabase
         try:
-            result = self.supabase.table(self.table_name).update({
+            result = await self.supabase.table(self.table_name).update({
                 'user_initial_request': None,
                 'clarifying_answers': None,
                 'confirmation_plan': None,
@@ -251,7 +251,7 @@ class SessionManager:
             if session.confirmation_plan:
                 updates['confirmation_plan'] = session.confirmation_plan
 
-            result = self.supabase.table(self.table_name).update(updates).eq('id', session_id).eq('user_id', user_id).execute()
+            result = await self.supabase.table(self.table_name).update(updates).eq('id', session_id).eq('user_id', user_id).execute()
             print(f"[DEBUG SessionManager] ✅ Parameters UPDATE successful")
             logger.info(f"Updated parameters for session {session_id}")
 
@@ -286,7 +286,7 @@ class SessionManager:
             
             # Update in Supabase
             try:
-                result = self.supabase.table(self.table_name).update({
+                result = await self.supabase.table(self.table_name).update({
                     field: data,
                     'updated_at': session.updated_at.isoformat()
                 }).eq('id', session_id).eq('user_id', user_id).execute()

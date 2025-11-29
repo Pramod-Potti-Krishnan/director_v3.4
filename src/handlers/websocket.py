@@ -34,19 +34,15 @@ class WebSocketHandler:
         self.settings = get_settings()
         logger.info(f"Settings loaded: streamlined={self.settings.USE_STREAMLINED_PROTOCOL}, percentage={self.settings.STREAMLINED_PROTOCOL_PERCENTAGE}")
 
-        # Initialize Supabase client
-        try:
-            self.supabase = get_supabase_client()
-            logger.info("Supabase client initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize Supabase client: {str(e)}", exc_info=True)
-            raise
+        # Defer Supabase and SessionManager initialization (lazy init pattern)
+        # These will be initialized on first async call via _ensure_initialized()
+        self.supabase = None
+        self.sessions = None
 
-        # Initialize components
+        # Initialize components that don't require async operations
         logger.info("Initializing handler components...")
         self.intent_router = IntentRouter()
         self.director = DirectorAgent()
-        self.sessions = SessionManager(self.supabase)
         self.packager = MessagePackager()
         self.streamlined_packager = StreamlinedMessagePackager()
         self.workflow = WorkflowOrchestrator()
@@ -55,8 +51,23 @@ class WebSocketHandler:
         self.active_connections: Dict[str, WebSocket] = {}
         self.connection_lock = asyncio.Lock()
 
-        logger.info("WebSocketHandler initialized successfully with streamlined protocol: %s",
-                   self.settings.USE_STREAMLINED_PROTOCOL)
+        logger.info("WebSocketHandler initialized successfully (Supabase will be initialized on first connection)")
+
+    async def _ensure_initialized(self):
+        """
+        Ensure Supabase client and SessionManager are initialized (lazy initialization).
+
+        This method is called at the start of async operations to initialize
+        components that require async operations.
+        """
+        if self.supabase is None:
+            try:
+                self.supabase = await get_supabase_client()
+                self.sessions = SessionManager(self.supabase)
+                logger.info("✓ Supabase client and SessionManager initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize Supabase client: {str(e)}", exc_info=True)
+                raise
 
     def _should_use_streamlined(self, session_id: str) -> bool:
         """
@@ -146,6 +157,9 @@ class WebSocketHandler:
             session_id: The session ID from query parameter
             user_id: The user ID from query parameter
         """
+        # Initialize Supabase client and SessionManager if not already done
+        await self._ensure_initialized()
+
         # CRITICAL FIX: Check for existing connection to prevent multiple connections per session
         # This prevents race conditions, duplicate message processing, and strawman regeneration loops
         async with self.connection_lock:

@@ -3,17 +3,17 @@ Supabase client and operations for Deckster.
 """
 import os
 from typing import Optional
-from supabase import create_client, Client
+from supabase import acreate_client, AsyncClient
 from config.settings import get_settings
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 # Global client instance
-_supabase_client: Optional[Client] = None
+_supabase_client: Optional[AsyncClient] = None
 
 
-def get_supabase_client() -> Client:
+async def get_supabase_client() -> AsyncClient:
     """
     Get or create the Supabase client instance.
     
@@ -36,12 +36,12 @@ def get_supabase_client() -> Client:
             )
         
         try:
-            # Create client
-            _supabase_client = create_client(
+            # Create async client
+            _supabase_client = await acreate_client(
                 settings.SUPABASE_URL,
                 settings.SUPABASE_ANON_KEY
             )
-            logger.info("Supabase client initialized successfully")
+            logger.info("Supabase async client initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Supabase client: {e}")
             raise RuntimeError(f"Cannot connect to Supabase: {str(e)}")
@@ -68,7 +68,7 @@ class SupabaseOperations:
             Created session data
         """
         try:
-            result = self.client.table(self.sessions_table).insert(session_data).execute()
+            result = await self.client.table(self.sessions_table).insert(session_data).execute()
             logger.info(f"Created session: {session_data.get('id')}")
             return result.data[0] if result.data else session_data
         except Exception as e:
@@ -86,7 +86,7 @@ class SupabaseOperations:
             Session data or None
         """
         try:
-            result = self.client.table(self.sessions_table).select("*").eq("id", session_id).execute()
+            result = await self.client.table(self.sessions_table).select("*").eq("id", session_id).execute()
             if result.data:
                 return result.data[0]
             return None
@@ -106,7 +106,7 @@ class SupabaseOperations:
             Updated session data
         """
         try:
-            result = self.client.table(self.sessions_table).update(updates).eq("id", session_id).execute()
+            result = await self.client.table(self.sessions_table).update(updates).eq("id", session_id).execute()
             logger.info(f"Updated session {session_id}")
             return result.data[0] if result.data else updates
         except Exception as e:
@@ -124,7 +124,7 @@ class SupabaseOperations:
             Success status
         """
         try:
-            self.client.table(self.sessions_table).delete().eq("id", session_id).execute()
+            await self.client.table(self.sessions_table).delete().eq("id", session_id).execute()
             logger.info(f"Deleted session {session_id}")
             return True
         except Exception as e:

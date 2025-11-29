@@ -90,8 +90,8 @@ async def lifespan(app: FastAPI):
     # Validate Supabase connection
     from src.storage.supabase import get_supabase_client
     try:
-        client = get_supabase_client()
-        logger.info("✓ Supabase connection validated")
+        client = await get_supabase_client()
+        logger.info("✓ Supabase async client connection validated")
     except Exception as e:
         logger.error(f"FATAL: Failed to connect to Supabase: {str(e)}")
         raise RuntimeError("Cannot start without valid Supabase connection.")
