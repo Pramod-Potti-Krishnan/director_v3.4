@@ -3,6 +3,7 @@ Session management for Deckster.
 """
 from typing import Optional, Dict, Any
 from datetime import datetime
+import traceback
 from supabase import Client
 from src.models.session import Session
 from src.utils.logger import setup_logger
@@ -66,7 +67,10 @@ class SessionManager:
                 logger.debug(f"Session user_initial_request: {session.user_initial_request}")
                 return session
         except Exception as e:
-            logger.warning(f"Error fetching session {session_id}: {str(e)}")
+            logger.error(f"Error fetching session {session_id}: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] ❌ Supabase SELECT FAILED: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] Full traceback:")
+            traceback.print_exc()
         
         # Create new session
         print(f"[DEBUG SessionManager] ❌ NOT FOUND - Creating new session with state=PROVIDE_GREETING")
@@ -92,10 +96,14 @@ class SessionManager:
             session_data['updated_at'] = session.updated_at.isoformat()
 
             result = self.supabase.table(self.table_name).insert(session_data).execute()
+            print(f"[DEBUG SessionManager] ✅ Supabase INSERT successful - result: {result}")
             logger.info(f"Created new session {session_id} for user {user_id}")
             logger.info(f"🔍 DEBUG: Created NEW session in Supabase - state=PROVIDE_GREETING")
         except Exception as e:
-            logger.error(f"Error creating session in Supabase: {str(e)}")
+            logger.error(f"Error creating session in Supabase: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] ❌ Supabase INSERT FAILED: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] Full traceback:")
+            traceback.print_exc()
             # Continue with local session even if Supabase fails
         
         self.cache[cache_key] = session
@@ -134,9 +142,12 @@ class SessionManager:
                 print(f"[DEBUG SessionManager] 🗑️ Clearing cache for {cache_key}")
                 del self.cache[cache_key]
                 logger.debug(f"Cleared cache for session {session_id} after state update")
-                
+
         except Exception as e:
-            logger.error(f"Error updating session state: {str(e)}")
+            logger.error(f"Error updating session state: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] ❌ Supabase UPDATE FAILED: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] Full traceback:")
+            traceback.print_exc()
     
     async def add_to_history(self, session_id: str, user_id: str, message: Dict[str, Any]):
         """
@@ -158,13 +169,17 @@ class SessionManager:
         
         # Update in Supabase
         try:
-            self.supabase.table(self.table_name).update({
+            result = self.supabase.table(self.table_name).update({
                 'conversation_history': session.conversation_history,
                 'updated_at': session.updated_at.isoformat()
             }).eq('id', session_id).eq('user_id', user_id).execute()
             logger.debug(f"Added message to session {session_id} history")
+            print(f"[DEBUG SessionManager] ✅ History UPDATE successful")
         except Exception as e:
-            logger.error(f"Error updating conversation history: {str(e)}")
+            logger.error(f"Error updating conversation history: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] ❌ History UPDATE FAILED: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] Full traceback:")
+            traceback.print_exc()
     
     async def clear_context(self, session_id: str, user_id: str):
         """
@@ -188,7 +203,7 @@ class SessionManager:
 
         # Update in Supabase
         try:
-            self.supabase.table(self.table_name).update({
+            result = self.supabase.table(self.table_name).update({
                 'user_initial_request': None,
                 'clarifying_answers': None,
                 'confirmation_plan': None,
@@ -198,9 +213,13 @@ class SessionManager:
                 'current_state': 'ASK_CLARIFYING_QUESTIONS',  # Reset state in DB
                 'updated_at': session.updated_at.isoformat()
             }).eq('id', session_id).eq('user_id', user_id).execute()
+            print(f"[DEBUG SessionManager] ✅ Clear context UPDATE successful")
             logger.info(f"Cleared context for session {session_id} and reset state to ASK_CLARIFYING_QUESTIONS")
         except Exception as e:
-            logger.error(f"Error clearing session context: {str(e)}")
+            logger.error(f"Error clearing session context: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] ❌ Clear context UPDATE FAILED: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] Full traceback:")
+            traceback.print_exc()
     
     async def update_parameters(self, session_id: str, user_id: str, parameters: Dict[str, Any]):
         """
@@ -231,18 +250,22 @@ class SessionManager:
                 updates['clarifying_answers'] = session.clarifying_answers
             if session.confirmation_plan:
                 updates['confirmation_plan'] = session.confirmation_plan
-            
-            self.supabase.table(self.table_name).update(updates).eq('id', session_id).eq('user_id', user_id).execute()
+
+            result = self.supabase.table(self.table_name).update(updates).eq('id', session_id).eq('user_id', user_id).execute()
+            print(f"[DEBUG SessionManager] ✅ Parameters UPDATE successful")
             logger.info(f"Updated parameters for session {session_id}")
-            
+
             # Force refresh from database to ensure cache consistency
             cache_key = f"{user_id}:{session_id}"
             if cache_key in self.cache:
                 del self.cache[cache_key]
                 logger.debug(f"Cleared cache for session {session_id} after parameter update")
-                
+
         except Exception as e:
-            logger.error(f"Error updating session parameters: {str(e)}")
+            logger.error(f"Error updating session parameters: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] ❌ Parameters UPDATE FAILED: {type(e).__name__}: {str(e)}")
+            print(f"[DEBUG SessionManager] Full traceback:")
+            traceback.print_exc()
     
     async def save_session_data(self, session_id: str, user_id: str, field: str, data: Any):
         """
@@ -263,18 +286,22 @@ class SessionManager:
             
             # Update in Supabase
             try:
-                self.supabase.table(self.table_name).update({
+                result = self.supabase.table(self.table_name).update({
                     field: data,
                     'updated_at': session.updated_at.isoformat()
                 }).eq('id', session_id).eq('user_id', user_id).execute()
+                print(f"[DEBUG SessionManager] ✅ Save {field} UPDATE successful")
                 logger.info(f"Saved {field} for session {session_id}")
-                
+
                 # Force refresh from database to ensure cache consistency
                 # Remove from cache to force fresh read
                 cache_key = f"{user_id}:{session_id}"
                 if cache_key in self.cache:
                     del self.cache[cache_key]
                     logger.debug(f"Cleared cache for session {session_id} after save")
-                    
+
             except Exception as e:
-                logger.error(f"Error saving session data: {str(e)}")
+                logger.error(f"Error saving session data: {type(e).__name__}: {str(e)}")
+                print(f"[DEBUG SessionManager] ❌ Save {field} UPDATE FAILED: {type(e).__name__}: {str(e)}")
+                print(f"[DEBUG SessionManager] Full traceback:")
+                traceback.print_exc()
