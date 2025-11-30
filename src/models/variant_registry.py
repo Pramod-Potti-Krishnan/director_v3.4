@@ -531,6 +531,26 @@ class UnifiedVariantRegistry(BaseModel):
         # Return without priority number
         return [(svc, vid, vcfg) for svc, vid, vcfg, _ in variants_with_priority]
 
+    def get_statistics(self) -> Dict[str, Any]:
+        """
+        Get registry statistics.
+
+        Returns:
+            Dict with total_services, total_variants, total_keywords
+        """
+        total_keywords = 0
+        for service_config in self.services.values():
+            for variant_config in service_config.variants.values():
+                total_keywords += len(variant_config.classification.keywords)
+
+        return {
+            "total_services": len(self.services),
+            "total_variants": sum(
+                len(svc.variants) for svc in self.services.values()
+            ),
+            "total_keywords": total_keywords
+        }
+
     class Config:
         use_enum_values = True
         json_schema_extra = {

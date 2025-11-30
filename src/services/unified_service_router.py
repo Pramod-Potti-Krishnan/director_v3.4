@@ -116,15 +116,17 @@ class UnifiedServiceRouter:
             ValueError: If service type not supported
         """
         service_type = service_config.service_type
+        # Handle both enum and string types (config may use_enum_values=True)
+        service_type_str = service_type.value if hasattr(service_type, 'value') else str(service_type)
 
-        if service_type.value == "template_based":
+        if service_type_str == "template_based":
             return TextServiceAdapter(service_config)
-        elif service_type.value == "llm_generated":
+        elif service_type_str == "llm_generated":
             return IllustratorServiceAdapter(service_config)
-        elif service_type.value == "data_visualization":
+        elif service_type_str == "data_visualization":
             return AnalyticsServiceAdapter(service_config)
         else:
-            raise ValueError(f"Unsupported service type: {service_type}")
+            raise ValueError(f"Unsupported service type: {service_type_str}")
 
     async def generate_content(
         self,
@@ -364,7 +366,9 @@ class UnifiedServiceRouter:
             "status": str(variant.status),
             "service_name": service_name,
             "service_type": str(adapter.service_type),
+            "endpoint": adapter.get_endpoint_url(variant),
             "endpoint_pattern": str(adapter.endpoint_pattern),
+            "layout_id": variant.layout_id,
             "classification_priority": variant.classification.priority,
             "keywords_count": len(variant.classification.keywords),
             "required_fields": adapter.get_required_fields(variant_id),
