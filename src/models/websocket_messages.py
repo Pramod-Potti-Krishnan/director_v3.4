@@ -164,7 +164,7 @@ class BaseMessage(BaseModel):
     session_id: str = Field(..., description="Session identifier")
     timestamp: datetime = Field(default_factory=utc_now, description="Message timestamp (UTC)")
     type: MessageType = Field(..., description="Message type discriminator")
-    role: Optional[Literal["user", "assistant"]] = Field(None, description="Message sender role (user or assistant)")
+    role: Literal["user", "assistant"] = Field("assistant", description="Message sender role (user or assistant)")
 
     class Config:
         use_enum_values = True
