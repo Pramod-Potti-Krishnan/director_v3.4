@@ -30,7 +30,7 @@
       "type": "object",
       "description": "Map of service_name to ServiceConfig",
       "patternProperties": {
-        "^[a-z_]+_v\\d+(\\.\\d+)?$": {
+        "^[a-z_]+_v\\d+\\.\\d+$": {
           "$ref": "#/definitions/ServiceConfig"
         }
       },
@@ -93,7 +93,7 @@
           "type": "object",
           "description": "Map of variant_id to VariantConfig",
           "patternProperties": {
-            "^[a-z][a-z0-9_]*$": {
+            "^[a-z_]+$": {
               "$ref": "#/definitions/VariantConfig"
             }
           },
@@ -107,8 +107,8 @@
       "properties": {
         "variant_id": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]*$",
-          "description": "Unique identifier for the variant (snake_case with optional numbers)"
+          "pattern": "^[a-z_]+$",
+          "description": "Unique identifier for the variant"
         },
         "display_name": {
           "type": "string",
