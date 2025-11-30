@@ -5,10 +5,34 @@ This module defines the new streamlined message types for WebSocket communicatio
 Each message type has a single responsibility and maps directly to frontend UI components.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Literal, Union, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
+
+
+def utc_now() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
+
+def format_timestamp(dt: datetime) -> str:
+    """
+    Format datetime to ISO 8601 with 'Z' suffix for UTC.
+
+    Frontend JavaScript requires 'Z' suffix to correctly parse as UTC.
+    Without it, new Date() parses as local time causing timezone bugs.
+    """
+    if dt.tzinfo is None:
+        # Naive datetime - assume UTC, add Z
+        return dt.isoformat() + 'Z'
+    elif dt.tzinfo == timezone.utc or str(dt.tzinfo) == 'UTC':
+        # UTC timezone - replace +00:00 with Z
+        return dt.isoformat().replace('+00:00', 'Z')
+    else:
+        # Other timezone - convert to UTC first, then format
+        utc_dt = dt.astimezone(timezone.utc)
+        return utc_dt.isoformat().replace('+00:00', 'Z')
 
 
 class MessageType(str, Enum):
@@ -18,6 +42,7 @@ class MessageType(str, Enum):
     SLIDE_UPDATE = "slide_update"
     STATUS_UPDATE = "status_update"
     PRESENTATION_URL = "presentation_url"  # v2.0: For deck-builder URL responses
+    SYNC_RESPONSE = "sync_response"  # v3.4.2: For history sync protocol
 
 
 class ChatPayload(BaseModel):
@@ -104,18 +129,49 @@ class PresentationURLPayload(BaseModel):
     message: str = Field(..., description="Human-readable success message")
 
 
+class SyncResponsePayload(BaseModel):
+    """
+    Payload for sync response messages (v3.4.2 history sync protocol).
+
+    This is sent when frontend requests to skip history replay via skip_history=true.
+    Allows frontend to control whether Director sends full history on reconnect.
+    """
+    action: Literal["skip_history", "send_history", "send_delta"] = Field(
+        ...,
+        description="Sync action taken: skip_history (frontend has cache), send_history (full replay), send_delta (partial sync)"
+    )
+    message_count: int = Field(
+        ...,
+        description="Number of messages in Director's history (for frontend verification)"
+    )
+    current_state: str = Field(
+        ...,
+        description="Current session state (e.g., GENERATE_STRAWMAN, REFINE_STRAWMAN)"
+    )
+    has_strawman: bool = Field(
+        False,
+        description="Whether session has a strawman/presentation"
+    )
+    presentation_url: Optional[str] = Field(
+        None,
+        description="Current presentation URL if available"
+    )
+
+
 class BaseMessage(BaseModel):
     """Base message envelope for all message types"""
     message_id: str = Field(..., description="Unique message identifier")
     session_id: str = Field(..., description="Session identifier")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Message timestamp")
+    timestamp: datetime = Field(default_factory=utc_now, description="Message timestamp (UTC)")
     type: MessageType = Field(..., description="Message type discriminator")
     role: Optional[Literal["user", "assistant"]] = Field(None, description="Message sender role (user or assistant)")
 
     class Config:
         use_enum_values = True
         json_encoders = {
-            datetime: lambda v: v.isoformat()
+            # CRITICAL: Use Z suffix for UTC timestamps
+            # Frontend JavaScript requires 'Z' to parse as UTC, not local time
+            datetime: lambda v: format_timestamp(v)
         }
 
 
@@ -246,8 +302,37 @@ class PresentationURL(BaseMessage):
         }
 
 
+class SyncResponse(BaseMessage):
+    """
+    Sync response message for history sync protocol (v3.4.2).
+
+    Sent when frontend requests skip_history=true on WebSocket connect.
+    Allows frontend to avoid receiving duplicate messages it already has cached.
+    """
+    type: Literal[MessageType.SYNC_RESPONSE] = MessageType.SYNC_RESPONSE
+    payload: SyncResponsePayload
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message_id": "msg_sync_001",
+                "session_id": "session_abc",
+                "timestamp": "2024-01-01T10:00:00Z",
+                "type": "sync_response",
+                "role": "assistant",
+                "payload": {
+                    "action": "skip_history",
+                    "message_count": 12,
+                    "current_state": "REFINE_STRAWMAN",
+                    "has_strawman": True,
+                    "presentation_url": "https://example.com/p/abc-123"
+                }
+            }
+        }
+
+
 # Union type for all message types
-StreamlinedMessage = Union[ChatMessage, ActionRequest, SlideUpdate, StatusUpdate, PresentationURL]
+StreamlinedMessage = Union[ChatMessage, ActionRequest, SlideUpdate, StatusUpdate, PresentationURL, SyncResponse]
 
 
 def create_chat_message(
@@ -257,13 +342,14 @@ def create_chat_message(
     sub_title: Optional[str] = None,
     list_items: Optional[List[str]] = None,
     format: Literal["markdown", "plain"] = "markdown",
-    role: Optional[Literal["user", "assistant"]] = None,
+    role: Literal["user", "assistant"] = "assistant",
     timestamp: Optional[str] = None
 ) -> ChatMessage:
     """
     Helper function to create a chat message.
 
     Args:
+        role: Message sender role. Defaults to "assistant".
         timestamp: Optional ISO format timestamp string. If provided, overrides default timestamp.
                    This is critical for preserving original message timestamps during session restoration.
     """
@@ -283,7 +369,13 @@ def create_chat_message(
 
     # Override default timestamp if original timestamp provided (for historical messages)
     if timestamp:
-        msg.timestamp = datetime.fromisoformat(timestamp)
+        # Handle timestamps with or without Z suffix
+        ts = timestamp.rstrip('Z')  # Remove Z if present for fromisoformat
+        parsed = datetime.fromisoformat(ts)
+        # Ensure it's UTC-aware
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        msg.timestamp = parsed
 
     return msg
 
@@ -292,11 +384,12 @@ def create_action_request(
     session_id: str,
     prompt_text: str,
     actions: List[Dict[str, Any]],
-    message_id: Optional[str] = None
+    message_id: Optional[str] = None,
+    role: Literal["user", "assistant"] = "assistant"
 ) -> ActionRequest:
     """Helper function to create an action request"""
     import uuid
-    return ActionRequest(
+    msg = ActionRequest(
         message_id=message_id or f"msg_{uuid.uuid4().hex[:8]}",
         session_id=session_id,
         payload=ActionPayload(
@@ -304,6 +397,8 @@ def create_action_request(
             actions=[Action(**action) for action in actions]
         )
     )
+    msg.role = role
+    return msg
 
 
 def create_slide_update(
@@ -312,11 +407,12 @@ def create_slide_update(
     metadata: Dict[str, Any],
     slides: List[Dict[str, Any]],
     message_id: Optional[str] = None,
-    affected_slides: Optional[List[str]] = None
+    affected_slides: Optional[List[str]] = None,
+    role: Literal["user", "assistant"] = "assistant"
 ) -> SlideUpdate:
     """Helper function to create a slide update"""
     import uuid
-    return SlideUpdate(
+    msg = SlideUpdate(
         message_id=message_id or f"msg_{uuid.uuid4().hex[:8]}",
         session_id=session_id,
         payload=SlideUpdatePayload(
@@ -326,6 +422,8 @@ def create_slide_update(
             affected_slides=affected_slides
         )
     )
+    msg.role = role
+    return msg
 
 
 def create_status_update(
@@ -334,11 +432,12 @@ def create_status_update(
     text: str,
     message_id: Optional[str] = None,
     progress: Optional[int] = None,
-    estimated_time: Optional[int] = None
+    estimated_time: Optional[int] = None,
+    role: Literal["user", "assistant"] = "assistant"
 ) -> StatusUpdate:
     """Helper function to create a status update"""
     import uuid
-    return StatusUpdate(
+    msg = StatusUpdate(
         message_id=message_id or f"msg_{uuid.uuid4().hex[:8]}",
         session_id=session_id,
         payload=StatusPayload(
@@ -348,6 +447,8 @@ def create_status_update(
             estimated_time=estimated_time
         )
     )
+    msg.role = role
+    return msg
 
 
 def create_presentation_url(
@@ -356,11 +457,12 @@ def create_presentation_url(
     presentation_id: str,
     slide_count: int,
     message: str,
-    message_id: Optional[str] = None
+    message_id: Optional[str] = None,
+    role: Literal["user", "assistant"] = "assistant"
 ) -> PresentationURL:
     """Helper function to create a presentation URL message (v2.0)"""
     import uuid
-    return PresentationURL(
+    msg = PresentationURL(
         message_id=message_id or f"msg_{uuid.uuid4().hex[:8]}",
         session_id=session_id,
         payload=PresentationURLPayload(
@@ -370,3 +472,49 @@ def create_presentation_url(
             message=message
         )
     )
+    msg.role = role
+    return msg
+
+
+def create_sync_response(
+    session_id: str,
+    action: Literal["skip_history", "send_history", "send_delta"],
+    message_count: int,
+    current_state: str,
+    has_strawman: bool = False,
+    presentation_url: Optional[str] = None,
+    message_id: Optional[str] = None,
+    role: Literal["user", "assistant"] = "assistant"
+) -> SyncResponse:
+    """
+    Helper function to create a sync response message (v3.4.2).
+
+    Used by the history sync protocol to inform frontend about sync decision.
+
+    Args:
+        session_id: Current session ID
+        action: Sync action taken (skip_history, send_history, send_delta)
+        message_count: Number of messages in Director's conversation history
+        current_state: Current session state (e.g., REFINE_STRAWMAN)
+        has_strawman: Whether session has a strawman/presentation
+        presentation_url: Current presentation URL if available
+        message_id: Optional message ID (auto-generated if not provided)
+        role: Message sender role (defaults to assistant)
+
+    Returns:
+        SyncResponse message ready to send via WebSocket
+    """
+    import uuid
+    msg = SyncResponse(
+        message_id=message_id or f"msg_sync_{uuid.uuid4().hex[:8]}",
+        session_id=session_id,
+        payload=SyncResponsePayload(
+            action=action,
+            message_count=message_count,
+            current_state=current_state,
+            has_strawman=has_strawman,
+            presentation_url=presentation_url
+        )
+    )
+    msg.role = role
+    return msg
