@@ -16,7 +16,7 @@ from src.utils.message_packager import MessagePackager
 from src.utils.streamlined_packager import StreamlinedMessagePackager
 from src.storage.supabase import get_supabase_client
 from src.models.agents import UserIntent, StateContext
-from src.models.websocket_messages import StreamlinedMessage, create_chat_message
+from src.models.websocket_messages import StreamlinedMessage, create_chat_message, create_sync_response
 from src.workflows.state_machine import WorkflowOrchestrator
 from config.settings import get_settings
 
@@ -148,7 +148,13 @@ class WebSocketHandler:
             if i < len(messages) - 1:
                 await asyncio.sleep(0.1)
 
-    async def handle_connection(self, websocket: WebSocket, session_id: str, user_id: str):
+    async def handle_connection(
+        self,
+        websocket: WebSocket,
+        session_id: str,
+        user_id: str,
+        skip_history: bool = False
+    ):
         """
         Handle a WebSocket connection for a session.
 
@@ -156,6 +162,8 @@ class WebSocketHandler:
             websocket: The WebSocket connection
             session_id: The session ID from query parameter
             user_id: The user ID from query parameter
+            skip_history: If True, skip history replay and send sync_response instead.
+                         Frontend sets this when it has cached messages.
         """
         # Initialize Supabase client and SessionManager if not already done
         await self._ensure_initialized()
@@ -208,14 +216,50 @@ class WebSocketHandler:
                     logger.error(f"Failed to send greeting for session {session_id}: {str(greeting_error)}", exc_info=True)
                     raise
             else:
-                logger.info(f"Existing session - restoring history (state: {session.current_state})")
-                logger.info(f"✅ Restoring conversation history for session {session_id} (state: {session.current_state})")
-                try:
-                    await self._restore_conversation_history(websocket, session)
-                    logger.info(f"Conversation history restored successfully for session {session_id}")
-                except Exception as restore_error:
-                    logger.error(f"Failed to restore conversation history for session {session_id}: {str(restore_error)}", exc_info=True)
-                    # Don't raise - allow user to continue even if restoration fails
+                logger.info(f"Existing session - state: {session.current_state}, skip_history: {skip_history}")
+
+                if skip_history:
+                    # v3.4.2 SYNC PROTOCOL: Frontend requested to skip history replay
+                    # Send sync_response instead of full history to avoid duplicate messages
+                    logger.info(f"⏭️ Frontend requested skip_history for session {session_id}")
+
+                    # Determine presentation URL if session has a strawman
+                    presentation_url = None
+                    has_strawman = False
+                    if session.presentation_strawman:
+                        has_strawman = True
+                        if hasattr(session.presentation_strawman, 'preview_url'):
+                            presentation_url = session.presentation_strawman.preview_url
+                        elif isinstance(session.presentation_strawman, dict):
+                            presentation_url = session.presentation_strawman.get('preview_url') or session.presentation_strawman.get('url')
+                    if session.presentation_url:
+                        presentation_url = session.presentation_url
+
+                    # Create and send sync_response
+                    sync_response = create_sync_response(
+                        session_id=session_id,
+                        action="skip_history",
+                        message_count=len(session.conversation_history),
+                        current_state=session.current_state,
+                        has_strawman=has_strawman,
+                        presentation_url=presentation_url
+                    )
+
+                    try:
+                        await websocket.send_json(sync_response.model_dump(mode='json'))
+                        logger.info(f"✅ Sent sync_response (skip_history) for session {session_id}: "
+                                    f"message_count={len(session.conversation_history)}, state={session.current_state}")
+                    except Exception as sync_error:
+                        logger.error(f"Failed to send sync_response for session {session_id}: {str(sync_error)}", exc_info=True)
+                else:
+                    # Full history restoration (legacy behavior)
+                    logger.info(f"✅ Restoring conversation history for session {session_id} (state: {session.current_state})")
+                    try:
+                        await self._restore_conversation_history(websocket, session)
+                        logger.info(f"Conversation history restored successfully for session {session_id}")
+                    except Exception as restore_error:
+                        logger.error(f"Failed to restore conversation history for session {session_id}: {str(restore_error)}", exc_info=True)
+                        # Don't raise - allow user to continue even if restoration fails
 
             # Main message loop
             logger.info(f"Entering message loop for session {session_id}")
@@ -332,8 +376,16 @@ class WebSocketHandler:
 
         all_messages = []
 
+        # CRITICAL FIX: Sort history by timestamp to ensure chronological order
+        # This prevents messages from appearing out of order after restoration
+        sorted_history = sorted(
+            session.conversation_history,
+            key=lambda x: x.get('timestamp', '1970-01-01T00:00:00Z')
+        )
+        logger.info(f"📊 Sorted {len(sorted_history)} history items by timestamp")
+
         # Iterate through conversation history to reconstruct messages
-        for idx, history_item in enumerate(session.conversation_history):
+        for idx, history_item in enumerate(sorted_history):
             role = history_item.get('role')
             content = history_item.get('content')
             state = history_item.get('state')  # Only for assistant messages
@@ -680,17 +732,18 @@ class WebSocketHandler:
             response = await self.director.process(state_context)
 
             # Store in history with timestamps for proper chronological restoration
+            # CRITICAL: Use Z suffix for UTC timestamps - required for frontend JavaScript parsing
             await self.sessions.add_to_history(session.id, self.current_user_id, {
                 'role': 'user',
                 'content': user_input,
                 'intent': intent.dict(),
-                'timestamp': datetime.utcnow().isoformat()  # Preserve original send time
+                'timestamp': datetime.utcnow().isoformat() + 'Z'  # Preserve original send time (UTC with Z)
             })
             await self.sessions.add_to_history(session.id, self.current_user_id, {
                 'role': 'assistant',
                 'state': session.current_state,
                 'content': response,
-                'timestamp': datetime.utcnow().isoformat()  # Preserve original response time
+                'timestamp': datetime.utcnow().isoformat() + 'Z'  # Preserve original response time (UTC with Z)
             })
 
             # v3.1: Save strawman to session for REFINE_STRAWMAN and CONTENT_GENERATION

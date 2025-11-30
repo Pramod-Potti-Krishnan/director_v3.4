@@ -121,8 +121,22 @@ app.add_middleware(
 
 # WebSocket endpoint
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, session_id: str, user_id: str):
-    """Handle WebSocket connections with user authentication."""
+async def websocket_endpoint(
+    websocket: WebSocket,
+    session_id: str,
+    user_id: str,
+    skip_history: bool = False
+):
+    """
+    Handle WebSocket connections with user authentication.
+
+    Args:
+        websocket: The WebSocket connection
+        session_id: Session UUID
+        user_id: User ID (from auth)
+        skip_history: If true, skip history replay and send sync_response instead.
+                     Frontend sets this when it has cached messages (v3.4.2 sync protocol).
+    """
     # Check if API is disabled
     if not settings.API_ENABLED:
         logger.warning(f"WebSocket connection rejected - API is disabled (session: {session_id}, user: {user_id})")
@@ -146,11 +160,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, user_id: str
 
     try:
         await websocket.accept()
-        logger.info(f"WebSocket connection established for user: {user_id}, session: {session_id}")
+        logger.info(f"WebSocket connection established for user: {user_id}, session: {session_id}, skip_history: {skip_history}")
 
         # Handle the connection
         try:
-            await handler.handle_connection(websocket, session_id, user_id)
+            await handler.handle_connection(websocket, session_id, user_id, skip_history=skip_history)
         except Exception as handler_error:
             logger.error(f"Handler error for user {user_id}, session {session_id}: {str(handler_error)}", exc_info=True)
             raise
