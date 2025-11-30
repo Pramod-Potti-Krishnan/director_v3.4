@@ -133,6 +133,26 @@ class Settings(BaseSettings):
     )
     ANALYTICS_SERVICE_TIMEOUT: int = Field(30, env="ANALYTICS_SERVICE_TIMEOUT")  # Chart generation ~3s
 
+    # v3.4: Unified Variant Registration System (Phase 3.5)
+    # Registry-driven variant management for all content generation services
+    UNIFIED_VARIANT_SYSTEM_ENABLED: bool = Field(
+        False,  # Default: disabled (use existing system)
+        env="UNIFIED_VARIANT_SYSTEM_ENABLED",
+        description="Enable unified variant registration system for slide classification and routing"
+    )
+    UNIFIED_VARIANT_SYSTEM_PERCENTAGE: int = Field(
+        0,  # Default: 0% rollout
+        ge=0,
+        le=100,
+        env="UNIFIED_VARIANT_SYSTEM_PERCENTAGE",
+        description="Percentage of sessions to use unified system (0-100). Only applies if ENABLED=true"
+    )
+    VARIANT_REGISTRY_PATH: Optional[str] = Field(
+        None,  # Default: use config/unified_variant_registry.json
+        env="VARIANT_REGISTRY_PATH",
+        description="Path to unified variant registry JSON file (optional)"
+    )
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
