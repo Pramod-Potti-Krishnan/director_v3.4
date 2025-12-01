@@ -283,16 +283,16 @@ class SlideTypeClassifier:
         # Priority 2: Analytics/Chart detection (v3.4-analytics: Analytics Service)
         # Detect data visualizations, charts, and analytics slides BEFORE metrics
         # This prevents confusion between static metrics cards and dynamic charts
-        # CRITICAL v3.4.2: Only classify as analytics if slide has L01/L02/L03 layout
-        # Analytics Service CANNOT process L25 (content) or L29 (hero) layouts
+        # CRITICAL v3.4.2: Only classify as analytics if slide has L02 layout
+        # Analytics Service currently only works with L02 (L01/L03 planned for future)
         if cls._contains_keywords(text_corpus, cls.ANALYTICS_KEYWORDS):
-            # Check if slide has analytics-compatible layout
-            if hasattr(slide, 'layout_id') and slide.layout_id in ('L01', 'L02', 'L03'):
+            # Check if slide has L02 layout (the only analytics-compatible layout currently)
+            if hasattr(slide, 'layout_id') and slide.layout_id == 'L02':
                 return "analytics"
-            # L25/L29 slides with analytics keywords → fall through to text content types
+            # Non-L02 slides with analytics keywords → fall through to text content types
             logger.debug(
                 f"Slide has analytics keywords but layout '{getattr(slide, 'layout_id', 'unknown')}' "
-                f"is not analytics-compatible (L01/L02/L03). Falling through to text content types."
+                f"is not L02 (analytics layout). Falling through to text content types."
             )
 
         # Priority 3: Metrics detection (static KPI cards, not charts)
