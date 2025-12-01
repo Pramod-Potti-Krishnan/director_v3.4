@@ -216,16 +216,18 @@ class DiversityTracker:
             Suggested alternative classification (or None if none found)
         """
         # Define alternative classifications for each type
+        # UPDATED 2025-12-01: Using correct Text Service v1.2 classification names
+        # Note: grid_3x3 does not exist in Text Service, use grid_2x2_centered instead
         alternatives = {
-            "single_column": ["grid_3x3", "sequential_3col", "asymmetric_8_4"],
-            "grid_3x3": ["matrix_2x2", "comparison_2col", "sequential_3col"],
-            "matrix_2x2": ["grid_3x3", "comparison_2col", "styled_table"],
-            "comparison_2col": ["matrix_2x2", "styled_table", "grid_3x3"],
-            "sequential_3col": ["grid_3x3", "asymmetric_8_4", "hybrid_1_2x2"],
-            "metrics_grid": ["grid_3x3", "single_column", "styled_table"],
-            "styled_table": ["comparison_2col", "matrix_2x2", "grid_3x3"],
-            "hybrid_1_2x2": ["grid_3x3", "sequential_3col", "asymmetric_8_4"],
-            "asymmetric_8_4": ["single_column", "hybrid_1_2x2", "grid_3x3"],
+            "single_column": ["grid_2x2_centered", "sequential_3col", "asymmetric_8_4"],
+            "grid_2x2_centered": ["matrix_2x2", "comparison_2col", "sequential_3col"],
+            "matrix_2x2": ["grid_2x2_centered", "comparison_2col", "styled_table"],
+            "comparison_2col": ["matrix_2x2", "styled_table", "grid_2x2_centered"],
+            "sequential_3col": ["grid_2x2_centered", "asymmetric_8_4", "hybrid_1_2x2"],
+            "metrics_grid": ["grid_2x2_centered", "single_column", "styled_table"],
+            "styled_table": ["comparison_2col", "matrix_2x2", "grid_2x2_centered"],
+            "hybrid_1_2x2": ["grid_2x2_centered", "sequential_3col", "asymmetric_8_4"],
+            "asymmetric_8_4": ["single_column", "hybrid_1_2x2", "grid_2x2_centered"],
             "impact_quote": ["single_column", "asymmetric_8_4"]
         }
 

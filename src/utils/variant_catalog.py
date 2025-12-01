@@ -6,15 +6,18 @@ Loads and caches the 34 platinum variants from Text Service v1.2.
 
 The catalog maps slide types to their available variants:
 - matrix: 2 variants (matrix_2x2, matrix_2x3)
-- grid: 9 variants (grid_3x3_numbered, grid_3x3_icons, grid_4x2_catalog, etc.)
+- grid: 9 variants (grid_2x3, grid_3x2, grid_2x2_centered, grid_2x3_left, grid_3x2_left,
+                    grid_2x2_left, grid_2x3_numbered, grid_3x2_numbered, grid_2x2_numbered)
 - comparison: 3 variants (comparison_2col, comparison_3col, comparison_4col)
 - sequential: 3 variants (sequential_3col, sequential_4col, sequential_5col)
-- asymmetric: 3 variants (asymmetric_8_4_main, asymmetric_8_4_sidebar, asymmetric_8_4_balanced)
-- hybrid: 2 variants (hybrid_1_2x2, hybrid_2_1x2)
-- metrics: 4 variants (metrics_3card, metrics_4card, metrics_5card, metrics_6card)
-- impact_quote: 1 variant (impact_quote_customer)
+- asymmetric: 3 variants (asymmetric_8_4_3section, asymmetric_8_4_4section, asymmetric_8_4_5section)
+- hybrid: 2 variants (hybrid_top_2x2, hybrid_left_2x2)
+- metrics: 4 variants (metrics_3col, metrics_4col, metrics_3x2_grid, metrics_2x2_grid)
+- impact_quote: 1 variant (impact_quote)
 - table: 4 variants (table_2col, table_3col, table_4col, table_5col)
-- single_column: 3 variants (single_column_2section, single_column_3section, single_column_4section)
+- single_column: 3 variants (single_column_3section, single_column_4section, single_column_5section)
+
+UPDATED 2025-12-01: Corrected variant names to match Text Service v1.2 backend
 """
 
 import httpx

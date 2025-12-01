@@ -212,28 +212,29 @@ class SlideTypeMapper:
 
             # Default content variants for each classification
             # If classification is a hero type, we fall back to single_column
+            # UPDATED 2025-12-01: Using correct Text Service v1.2 variant names
             CONTENT_VARIANTS = {
-                # Content types → use base variants
-                "impact_quote": "impact_quote_centered",
-                "metrics_grid": "metrics_2col",
+                # Content types → use base variants (correct v1.2 variant_ids)
+                "impact_quote": "impact_quote",
+                "metrics_grid": "metrics_3col",
                 "matrix_2x2": "matrix_2x2",
-                "grid_3x3": "grid_3x3",
+                "grid_3x3": "grid_2x2_centered",  # grid_3x3 doesn't exist, use grid_2x2_centered
                 "styled_table": "table_2col",
                 "bilateral_comparison": "comparison_2col",
                 "sequential_3col": "sequential_3col",
-                "hybrid_1_2x2": "hybrid_1_2x2",
-                "asymmetric_8_4": "asymmetric_8_4",
-                "single_column": "single_column_2section",
+                "hybrid_1_2x2": "hybrid_top_2x2",  # Use correct v1.2 variant name
+                "asymmetric_8_4": "asymmetric_8_4_3section",  # Use correct v1.2 variant name
+                "single_column": "single_column_3section",  # Use correct v1.2 variant name
 
                 # Hero types → fallback to single_column (can't use hero on L25!)
-                "title_slide": "single_column_2section",
-                "section_divider": "single_column_2section",
-                "closing_slide": "single_column_2section",
+                "title_slide": "single_column_3section",
+                "section_divider": "single_column_3section",
+                "closing_slide": "single_column_3section",
             }
 
             variant_id = CONTENT_VARIANTS.get(
                 director_classification,
-                "single_column_2section"  # Ultimate fallback for L25
+                "single_column_3section"  # Ultimate fallback for L25 (correct v1.2 name)
             )
 
             logger.debug(
@@ -245,7 +246,7 @@ class SlideTypeMapper:
         else:
             # Invalid layout_id - log error and fallback safely
             logger.error(f"Invalid layout_id '{layout_id}'. Must be 'L25' or 'L29'. Using L25 fallback.")
-            return "single_column_2section"  # Safe default for invalid layout_id
+            return "single_column_3section"  # Safe default for invalid layout_id (correct v1.2 name)
 
     @classmethod
     def get_mapping_summary(cls) -> Dict[str, Dict[str, any]]:
