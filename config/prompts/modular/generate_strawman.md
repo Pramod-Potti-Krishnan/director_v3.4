@@ -183,6 +183,56 @@ These are automatically detected and don't need keywords:
 - **Section Divider:** Transition slides between major sections
 - **Closing Slide:** Final thank you/contact slide
 
+### Hero Slide Content Requirements (CRITICAL)
+
+Hero slides require RICH narratives that provide context to the Text Service. Generic narratives like "Transition to the next section" will result in poor content generation.
+
+**For Section Dividers**, the `narrative` field MUST:
+- Describe what topics will be covered in this section
+- Reference how this section connects to what came before
+- Provide enough context for Text Service to generate meaningful content
+
+**GOOD Section Divider Example:**
+```json
+{
+  "generated_title": "Evolution and Consolidation",
+  "narrative": "This section covers how our AI technology evolved from basic automation to full consolidation, covering the key milestones of 2023-2024 and the three major product pivots that led to our current platform.",
+  "key_points": ["AI automation journey", "2023-2024 milestones", "Platform consolidation"]
+}
+```
+
+**BAD Section Divider Example:**
+```json
+{
+  "generated_title": "Evolution and Consolidation",
+  "narrative": "Transition to the evolution phase"
+}
+```
+The bad example is too vague - it doesn't tell the Text Service what this section is about.
+
+**For Closing Slides**, the `narrative` field MUST:
+- Summarize the key takeaway from the entire presentation
+- Include specific call-to-action context
+- Reference the main topics covered
+
+**GOOD Closing Slide Example:**
+```json
+{
+  "generated_title": "Thank You & Questions",
+  "narrative": "After covering our AI platform's 40% cost savings, 3x faster processing, and seamless integration capabilities, we invite questions and discussions about implementation timelines.",
+  "key_points": ["40% cost savings recap", "3x faster processing", "Implementation discussion"]
+}
+```
+
+**BAD Closing Slide Example:**
+```json
+{
+  "generated_title": "Thank You",
+  "narrative": "Conclude the presentation and thank the audience"
+}
+```
+The bad example provides no context about what was covered or what the call-to-action should be.
+
 ---
 
 ## Presentation Diversity Guidelines
